@@ -6,7 +6,7 @@ import math
 import random
 import uuid
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Iterable, List, Optional
 from PIL import Image
 
 #  __  __           ___                   _   
@@ -201,6 +201,19 @@ def read_monochrome_image(filename: str, width: int, height: int) -> Image.Image
     
     return image
 
+def normalized_image_data(image: Image.Image) -> List[float]:
+    data = image.getdata()
+    image_min = min(data)
+    image_max = max(data)
+    image_range = image_max - image_min
+    print(f'Image Data Range: {image_min} - {image_max}')
+
+    result: List[float] = []
+    for pixel in data:
+        result.append((pixel - image_min)/image_range)
+    
+    return result
+
 #  _  _     _      _   _                   
 # | || |___(_)__ _| |_| |_ _ __  __ _ _ __ 
 # | __ / -_) / _` | ' \  _| '  \/ _` | '_ \
@@ -234,14 +247,8 @@ def read_heightmap(width: int, height: int, min_height: int, max_height: int, fi
 
     print(f'\nReading Heightmap')
     image = read_monochrome_image(filename, width, height)
-    image_min = min(image.getdata())
-    image_max = max(image.getdata())
-    image_range = image_max - image_min
-    print(f'Image Min: {image_min}')
-    print(f'Image Max: {image_max}')
     height_data = []
-    for pixel in image.getdata():
-        normalized = (pixel - image_min)/image_range
+    for normalized in normalized_image_data(image):
         height = round(normalized * output_range + min_height)
         height_data.append(height)
 
@@ -291,14 +298,8 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
 
     print(f'\nReading Water Map')
     image = read_monochrome_image(filename, heightmap.width, heightmap.height)
-    image_min = min(image.getdata())
-    image_max = max(image.getdata())
-    image_range = image_max - image_min
-    print(f'Image Min: {image_min}')
-    print(f'Image Max: {image_max}')
     depths = []
-    for pixel in image.getdata():
-        normalized = (pixel - image_min)/image_range
+    for normalized in normalized_image_data(image):
         depths.append(round(normalized))
 
     # Generate a soil moisture map from the water map
@@ -393,15 +394,9 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
 
     print(f'\nReading Treemap')
     image = read_monochrome_image(filename, heightmap.width, heightmap.height)
-    image_min = min(image.getdata())
-    image_max = max(image.getdata())
-    print(f'Image Min: {image_min}')
-    print(f'Image Max: {image_max}')
-    image_range = image_max - image_min
 
     trees = []
-    for i, pixel in enumerate(image.getdata()):
-        normalized = (pixel - image_min)/image_range
+    for i, normalized in enumerate(normalized_image_data(image)):
         if normalized > treeline_cutoff:
             z = heightmap.data[i]
             y = math.floor(i / image.width)
