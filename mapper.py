@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 import argparse
+import contextlib
 import json
 import math
+import os
 import random
 import uuid
 from dataclasses import dataclass
-from typing import List, Optional
+from types import SimpleNamespace
+from typing import Any, List, Optional, Tuple, Union
 from PIL import Image
 
 #  __  __           ___                   _   
@@ -411,25 +414,68 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
 # |_|  |_\__,_|_|_||_|
 # Main                    
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description='Convert a heightmap into a Timberborn custom map.')
-    parser.add_argument('--output', type=str, help='Path to output the resulting map to.')
+@dataclass
+class ImageToTimberbornHeightmapSpec:
+    filename: str
+    min_height: int = 3
+    max_height: int = 16
 
-    parser.add_argument('--heightmap', type=str, help='Path to a grayscale heightmap image.')
-    parser.add_argument('--min-height', type=int, help='Soil depth at the lowest point in the heightmap.', default=3)
-    parser.add_argument('--max-height', type=int, help='Soil depth at the highest point in the heightmap.', default=13)
-    parser.add_argument('--width', type=int, help='Width of the resulting map.', default=-1)
-    parser.add_argument('--height', type=int, help='Height of the resulting map.', default=-1)
+@dataclass
+class ImageToTimberbornTreemapSpec:
+    filename: str
+    treeline_cutoff: float
 
-    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image.', default=None)
-    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn.', default=0.2)
+@dataclass
+class ImageToTimberbornWatermapSpec:
+    filename: str
 
-    parser.add_argument('--water-map', type=str, help='Path to a grayscale water map image.', default=None)
-    args = parser.parse_args()
+class ImageToTimberbornSpec:
+    def __init__(
+        self,
+        heightmap: Union[ImageToTimberbornHeightmapSpec, dict],
+        width: int = -1, # XXX should use optional instead of sentinel value
+        height: int = -1,
+        treemap: Union[Optional[ImageToTimberbornTreemapSpec], dict] = None,
+        watermap: Union[Optional[ImageToTimberbornWatermapSpec], dict] = None,
+    ):
+        self.width = width
+        self.height = height
 
-    heightmap = read_heightmap(width=args.width, height=args.height, min_height=args.min_height, max_height=args.max_height, filename=args.heightmap)
-    water_map = read_water_map(heightmap, args.water_map)
-    tree_map = read_tree_map(heightmap, water_map, args.treeline_cutoff, args.treemap)
+        if isinstance(heightmap, dict):
+            heightmap = ImageToTimberbornHeightmapSpec(**heightmap)
+        self.heightmap = heightmap
+
+        if isinstance(treemap, dict):
+            treemap = ImageToTimberbornTreemapSpec(**treemap)
+        self.treemap = treemap
+
+        if isinstance(watermap, dict):
+            watermap = ImageToTimberbornWatermapSpec(**watermap)
+        self.watermap = watermap
+
+    width: int
+    height: int
+    heightmap: ImageToTimberbornHeightmapSpec
+    treemap: Optional[ImageToTimberbornTreemapSpec]
+    watermap: Optional[ImageToTimberbornWatermapSpec]
+
+def image_to_timberborn(spec: ImageToTimberbornSpec, output: str) -> None:
+    heightmap = read_heightmap(
+        width=spec.width,
+        height=spec.height,
+        min_height=spec.heightmap.min_height,
+        max_height=spec.heightmap.max_height,
+        filename=spec.heightmap.filename,
+    )
+    if spec.watermap is None:
+        water_map = read_water_map(heightmap, None)
+    else:
+        water_map = read_water_map(heightmap, spec.watermap.filename)
+    
+    if spec.treemap is None:
+        tree_map = read_tree_map(heightmap, water_map, 0, None)
+    else:
+        tree_map = read_tree_map(heightmap, water_map, spec.treemap.treeline_cutoff, spec.treemap.filename)
 
     singletons = TimberbornSingletons(
         MapSize=heightmap.map_size,
@@ -438,8 +484,82 @@ def main() -> None:
         WaterMap=water_map.water_map,
     )
     map = TimberbornMap("0", singletons, tree_map.entities)
-    with open(args.output, 'w') as f:
+    with open(output, 'w') as f:
         json.dump(map, f, indent=4)
+
+def manual_image_to_timberborn(args: Any) -> None:
+    treemap = None
+    if args.treemap is not None:
+        treemap=ImageToTimberbornTreemapSpec(
+            filename=args.treemap,
+            treeline_cutoff=args.treeline_cutoff,
+        )
+    
+    watermap = None
+    if args.water_map is not None:
+        watermap=ImageToTimberbornWatermapSpec(
+            filename=args.water_map,
+        )
+    
+    image_to_timberborn(
+        ImageToTimberbornSpec(
+            width=args.width,
+            height=args.height,
+            heightmap=ImageToTimberbornHeightmapSpec(
+                filename=args.heightmap,
+                min_height=args.min_height,
+                max_height=args.max_height,
+            ),
+            treemap=treemap,
+            watermap=watermap,
+        ),
+        args.output,
+    )
+
+def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--output', type=str, help='Path to output the resulting map to.')
+
+    parser.add_argument('--heightmap', type=str, help='Path to a grayscale heightmap image.')
+    parser.add_argument('--min-height', type=int, help='Soil depth at the lowest point in the heightmap.', default=3)
+    parser.add_argument('--max-height', type=int, help='Soil depth at the highest point in the heightmap.', default=16)
+    parser.add_argument('--width', type=int, help='Width of the resulting map.', default=-1)
+    parser.add_argument('--height', type=int, help='Height of the resulting map.', default=-1)
+
+    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image.', default=None)
+    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn.', default=0.2)
+
+    parser.add_argument('--water-map', type=str, help='Path to a grayscale water map image.', default=None)
+    parser.set_defaults(func=manual_image_to_timberborn)
+
+@contextlib.contextmanager
+def change_cwd(newdir: str):
+    curdir= os.getcwd()
+    os.chdir(newdir)
+    try:
+        yield
+    finally:
+        os.chdir(curdir)
+
+def specfile_to_timberborn(args: Any) -> None:
+    with open(args.input, 'r') as f:
+        specdict = json.load(f)
+
+    with change_cwd(os.path.dirname(args.input)):
+        image_to_timberborn(ImageToTimberbornSpec(**specdict), args.output)
+
+def add_specfile_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('input', type=str, help='Path to the json specfile which defines what to convert into a timberborn map.')
+    parser.add_argument('output', type=str, help='Path to output the resulting map to.')
+    parser.set_defaults(func=specfile_to_timberborn)
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Tool for manipulating timberborn custom maps.')
+    subparsers = parser.add_subparsers()
+    add_manual_image_to_timberborn_args(subparsers.add_parser('manual-image-to-timberborn', help='Turn one or more specified images into a timberborn custom map.'))
+    add_specfile_to_timberborn_args(subparsers.add_parser('specfile-to-timberborn', help='Use a json specification to define how to turn images into a timberborn map.'))
+
+    args = parser.parse_args()
+    args.func(args)
 
 if __name__ == '__main__':
     main()
