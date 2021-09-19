@@ -2,6 +2,9 @@
 A tool for turning heightmaps into Timberborn maps.
 
 # Setup
-Right now, the only dependency is Pillow. See the installation instructions for it [here](https://pillow.readthedocs.io/en/stable/installation.html).
+1. Install python. You can find it [here](https://www.python.org/downloads/).
+2. Install pillow. You can read their instructions [here](https://pillow.readthedocs.io/en/stable/installation.html), or just open your command prompt and run "python -m pip install pillow".
+3. Click the green "Code" button in github for directions to download this code.
 
-The help text should be mostly self-explanatory. Run `python mapper.py --help` to see the help text.
+# Usage
+Open the command prompt and cd to the directory with the code. Run `python mapper.py --help` to see instructions on how to use it.
