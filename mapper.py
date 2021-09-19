@@ -178,6 +178,29 @@ class TimberbornMap(dict):
             Entities=Entities
         )
 
+
+#  ___                     _  _                    _ _         _   _          
+# |_ _|_ __  __ _ __ _ ___| \| |___ _ _ _ __  __ _| (_)_____ _| |_(_)___ _ _  
+# | || '  \/ _` / _` / -_) .` / _ \ '_| '  \/ _` | | |_ / _` |  _| / _ \ ' \ 
+# |___|_|_|_\__,_\__, \___|_|\_\___/_| |_|_|_\__,_|_|_/__\__,_|\__|_\___/_||_|
+#               |___/                                                        
+# Image Normalization
+
+def read_monochrome_image(filename: str, width: int, height: int) -> Image.Image:
+    image = Image.open(filename)
+    print(f'Image Size: {image.size}')
+
+    image = image.convert('I')
+    if width > 0:
+        print(f'Adjusting width to {width}')
+        image = image.resize((width, image.height))
+
+    if height > 0:
+        print(f'Adjusting height to {height}')
+        image = image.resize((image.width, height))
+    
+    return image
+
 #  _  _     _      _   _                   
 # | || |___(_)__ _| |_| |_ _ __  __ _ _ __ 
 # | __ / -_) / _` | ' \  _| '  \/ _` | '_ \
@@ -209,21 +232,13 @@ class Heightmap:
 def read_heightmap(width: int, height: int, min_height: int, max_height: int, filename: str) -> Heightmap:
     output_range = max_height - min_height
 
-    image = Image.open(filename)
-    image = image.convert('I')
-    if width > 0:
-        image = image.resize((width, image.height))
-    if height > 0:
-        image = image.resize((image.width, height))
-
+    print(f'\nReading Heightmap')
+    image = read_monochrome_image(filename, width, height)
     image_min = min(image.getdata())
     image_max = max(image.getdata())
     image_range = image_max - image_min
-    print(f'Reading Heightmap')
-    print(f'Image Size: {image.size}')
     print(f'Image Min: {image_min}')
     print(f'Image Max: {image_max}')
-    print(f'{image.getbands()}')
     height_data = []
     for pixel in image.getdata():
         normalized = (pixel - image_min)/image_range
@@ -274,11 +289,8 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
             heightmap.height
         )
 
-    image = Image.open(filename)
-    print(f'Reading Water Map')
-    print(f'Image Size: {image.size}. Normalizing to ({heightmap.width}, {heightmap.height})')
-    # Normalize the size of the moisture map to the standard dimensions
-    image = image.resize((heightmap.width, heightmap.height))
+    print(f'\nReading Water Map')
+    image = read_monochrome_image(filename, heightmap.width, heightmap.height)
     image_min = min(image.getdata())
     image_max = max(image.getdata())
     image_range = image_max - image_min
@@ -379,11 +391,8 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
     if filename is None:
         return TreeMap([])
 
-    image = Image.open(filename)
-    print(f'Reading Treemap')
-    print(f'Image Size: {image.size}. Normalizing to ({heightmap.width}, {heightmap.height})')
-    # Normalize the size of the treemap to the standard dimensions
-    image = image.resize((heightmap.width, heightmap.height))
+    print(f'\nReading Treemap')
+    image = read_monochrome_image(filename, heightmap.width, heightmap.height)
     image_min = min(image.getdata())
     image_max = max(image.getdata())
     print(f'Image Min: {image_min}')
