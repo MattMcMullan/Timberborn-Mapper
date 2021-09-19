@@ -6,8 +6,8 @@ import math
 import os
 import random
 import uuid
-from dataclasses import dataclass
-from types import SimpleNamespace
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, List, Optional, Tuple, Union
 from PIL import Image
 
@@ -212,7 +212,7 @@ def normalized_image_data(image: Image.Image) -> List[float]:
     result: List[float] = []
     for pixel in data:
         result.append((pixel - image_min)/image_range)
-    
+
     return result
 
 #  _  _     _      _   _                   
@@ -243,19 +243,81 @@ class Heightmap:
         assert(y < self.height)
         return self.data[x + y * self.width]
 
-def read_heightmap(width: int, height: int, min_height: int, max_height: int, filename: str) -> Heightmap:
-    output_range = max_height - min_height
+@dataclass
+class ImageToTimberbornHeightmapLinearConversionSpec:
+    min_height: int = 3
+    max_height: int = 16
 
+@dataclass
+class ImageToTimberbornHeightmapBucketizedConversionSpec:
+    bucket_weights: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.067, 0.1, 0.11, 0.14, 0.15, 0.07, 0.13, 0.079, 0.049, 0.022, 0.022, 0.011, 0.018, 0.017])
+
+@dataclass
+class ImageToTimberbornHeightmapSpec:
+    def __init__(
+        self,
+        filename: str,
+        linear_conversion: Union[Optional[ImageToTimberbornHeightmapLinearConversionSpec], dict] = None,
+        bucketized_conversion: Union[Optional[ImageToTimberbornHeightmapBucketizedConversionSpec], dict] = None,
+    ):
+        self.filename = filename
+
+        if isinstance(linear_conversion, dict):
+            linear_conversion = ImageToTimberbornHeightmapLinearConversionSpec(**linear_conversion)
+        self.linear_conversion = linear_conversion
+
+        if isinstance(bucketized_conversion, dict):
+            bucketized_conversion = ImageToTimberbornHeightmapBucketizedConversionSpec(**bucketized_conversion)
+        self.bucketized_conversion = bucketized_conversion
+
+        assert self.linear_conversion is None or self.bucketized_conversion is None, 'Linear heightmap conversion and bucketized heightmap conversion are mutually exclusive'
+        
+        if self.linear_conversion is None and self.bucketized_conversion is None:
+            self.linear_conversion = ImageToTimberbornHeightmapLinearConversionSpec()
+
+    filename: str
+    linear_conversion: Optional[ImageToTimberbornHeightmapLinearConversionSpec]
+    bucketized_conversion: Optional[ImageToTimberbornHeightmapBucketizedConversionSpec]
+
+def bucketize_data(data: List[float], bucket_weights: List[float]) -> List[int]:
+    bucket_cutoffs = [math.ceil(sum(bucket_weights[:i])/sum(bucket_weights) * len(data)) for i in range(1, len(bucket_weights) + 1)]
+    bucket_cutoffs[-1] += 1
+    print(bucket_cutoffs)
+
+    sortable: List[Tuple[int, float]] = [(i, v) for i, v in enumerate(data)]
+    sortable.sort(key = lambda t: t[1])
+    result = [0] * len(data)
+    for i, s in enumerate(sortable):
+        for bucket, cutoff in enumerate(bucket_cutoffs):
+            if cutoff > i:
+                result[s[0]] = bucket
+                assert bucket < 16, f'{bucket} >= 16. 16 is the largest number of layers supported by Timberborn'
+                break
+        else:
+            assert False, f'{i} pixel was missed.'
+
+    return result
+
+def read_heightmap(width: int, height: int, spec: ImageToTimberbornHeightmapSpec) -> Heightmap:
     print(f'\nReading Heightmap')
-    image = read_monochrome_image(filename, width, height)
-    height_data = []
-    for normalized in normalized_image_data(image):
-        height = round(normalized * output_range + min_height)
-        height_data.append(height)
+    image = read_monochrome_image(spec.filename, width, height)
+
+    if spec.linear_conversion is not None:
+        print('Converting image to heightmap data with method: linear')
+        output_range = spec.linear_conversion.max_height - spec.linear_conversion.min_height
+        height_data = []
+        for normalized in normalized_image_data(image):
+            height = round(normalized * output_range + spec.linear_conversion.min_height)
+            height_data.append(height)
+    elif spec.bucketized_conversion is not None:
+        print('Converting image to heightmap data with method: bucketized')
+        height_data = [b for b in bucketize_data(normalized_image_data(image), spec.bucketized_conversion.bucket_weights)]
+    else:
+        assert False, 'Must specify a conversion method for heightmap data.'
 
     return Heightmap(
-        min_height=min_height,
-        max_height=max_height,
+        min_height=min(height_data),
+        max_height=max(height_data),
         width=image.size[0],
         height=image.size[1],
         data=height_data,
@@ -415,12 +477,6 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
 # Main                    
 
 @dataclass
-class ImageToTimberbornHeightmapSpec:
-    filename: str
-    min_height: int = 3
-    max_height: int = 16
-
-@dataclass
 class ImageToTimberbornTreemapSpec:
     filename: str
     treeline_cutoff: float
@@ -460,13 +516,7 @@ class ImageToTimberbornSpec:
     watermap: Optional[ImageToTimberbornWatermapSpec]
 
 def image_to_timberborn(spec: ImageToTimberbornSpec, output: str) -> None:
-    heightmap = read_heightmap(
-        width=spec.width,
-        height=spec.height,
-        min_height=spec.heightmap.min_height,
-        max_height=spec.heightmap.max_height,
-        filename=spec.heightmap.filename,
-    )
+    heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap)
     if spec.watermap is None:
         water_map = read_water_map(heightmap, None)
     else:
@@ -507,8 +557,8 @@ def manual_image_to_timberborn(args: Any) -> None:
             height=args.height,
             heightmap=ImageToTimberbornHeightmapSpec(
                 filename=args.heightmap,
-                min_height=args.min_height,
-                max_height=args.max_height,
+                linear_conversion=ImageToTimberbornHeightmapLinearConversionSpec(min_height=args.min_height, max_height=args.max_height) if not args.bucketize_heightmap else None,
+                bucketized_conversion=ImageToTimberbornHeightmapBucketizedConversionSpec() if args.bucketize_heightmap else None,
             ),
             treemap=treemap,
             watermap=watermap,
@@ -517,11 +567,12 @@ def manual_image_to_timberborn(args: Any) -> None:
     )
 
 def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('--output', type=str, help='Path to output the resulting map to.')
+    parser.add_argument('heightmap', type=str, help='Path to a grayscale heightmap image.')
+    parser.add_argument('output', type=str, help='Path to output the resulting map to.')
 
-    parser.add_argument('--heightmap', type=str, help='Path to a grayscale heightmap image.')
     parser.add_argument('--min-height', type=int, help='Soil depth at the lowest point in the heightmap.', default=3)
     parser.add_argument('--max-height', type=int, help='Soil depth at the highest point in the heightmap.', default=16)
+    parser.add_argument('--bucketize-heightmap', action='store_true', help='Use a specific proportion of height values rather than linearly interpolating the image value between the min and max height. Use a spec file to specify non-default bucket weights.')
     parser.add_argument('--width', type=int, help='Width of the resulting map.', default=-1)
     parser.add_argument('--height', type=int, help='Height of the resulting map.', default=-1)
 
