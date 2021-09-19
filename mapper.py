@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-import sys
 import json
 import math
 import random
 import uuid
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from PIL import Image
 
 #  __  __           ___                   _   
@@ -178,7 +177,6 @@ class TimberbornMap(dict):
             Entities=Entities
         )
 
-
 #  ___                     _  _                    _ _         _   _          
 # |_ _|_ __  __ _ __ _ ___| \| |___ _ _ _ __  __ _| (_)_____ _| |_(_)___ _ _  
 # | || '  \/ _` / _` / -_) .` / _ \ '_| '  \/ _` | | |_ / _` |  _| / _ \ ' \ 
@@ -285,7 +283,7 @@ class WaterMap:
     def get(self, x: int, y: int) -> int:
         assert(x < self.width)
         assert(y < self.height)
-        return self.depths[x + y * width]
+        return self.depths[x + y * self.width]
 
 def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
     if filename is None:
