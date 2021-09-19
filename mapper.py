@@ -250,7 +250,7 @@ class ImageToTimberbornHeightmapLinearConversionSpec:
 
 @dataclass
 class ImageToTimberbornHeightmapBucketizedConversionSpec:
-    bucket_weights: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.067, 0.1, 0.11, 0.14, 0.15, 0.07, 0.13, 0.079, 0.049, 0.022, 0.022, 0.011, 0.018, 0.017])
+    weights: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.067, 0.1, 0.11, 0.14, 0.15, 0.07, 0.13, 0.079, 0.049, 0.022, 0.022, 0.011, 0.018, 0.017])
 
 @dataclass
 class ImageToTimberbornHeightmapSpec:
@@ -311,7 +311,7 @@ def read_heightmap(width: int, height: int, spec: ImageToTimberbornHeightmapSpec
             height_data.append(height)
     elif spec.bucketized_conversion is not None:
         print('Converting image to heightmap data with method: bucketized')
-        height_data = [b for b in bucketize_data(normalized_image_data(image), spec.bucketized_conversion.bucket_weights)]
+        height_data = [b for b in bucketize_data(normalized_image_data(image), spec.bucketized_conversion.weights)]
     else:
         assert False, 'Must specify a conversion method for heightmap data.'
 

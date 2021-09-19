@@ -1,0 +1,18 @@
+{
+    "width": 256,
+    "height": 256,
+    "heightmap": {
+        "filename": "height.png",
+        "linear_conversion": {
+            "min_height": 3,
+            "max_height": 16
+        }
+    },
+    "treemap": {
+        "filename": "trees.png",
+        "treeline_cutoff": 0.2
+    },
+    "watermap": {
+        "filename": "water.png"
+    }
+}
