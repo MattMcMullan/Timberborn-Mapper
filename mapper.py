@@ -100,12 +100,9 @@ class TimberbornNaturalResourceModelRandomizer(dict):
         dict.__init__(self, Rotation=Rotation, DiameterScale=DiameterScale, HeightScale=HeightScale)
 
     @classmethod
-    def random(cls, scale: float) -> 'TimberbornNaturalResourceModelRandomizer':
-        return TimberbornNaturalResourceModelRandomizer(
-            random.random() * 360,
-            0.25 + scale,
-            0.25 + scale,
-        )
+    def random(cls) -> 'TimberbornNaturalResourceModelRandomizer':
+        scale = random.random() * 0.75 + 0.5
+        return TimberbornNaturalResourceModelRandomizer(random.random() * 360, scale, scale)
 
 class TimberbornYielderCuttable(dict):
     def __init__(self, Id: str, Amount: int):
@@ -161,9 +158,9 @@ class TimberbornTreeComponents(dict):
         self['Yielder:Cuttable'] = YielderCuttable
         self['Inventory:GoodStack'] = {"Storage": {"Goods": []}}
 
-class TimberbornPineTree(TimberbornEntity):
-    def __init__(self, Components: TimberbornTreeComponents):
-        TimberbornEntity.__init__(self, "Pine")
+class TimberbornTree(TimberbornEntity):
+    def __init__(self, species: str, Components: TimberbornTreeComponents):
+        TimberbornEntity.__init__(self, species)
         self["Components"] = Components
 
 class TimberbornMap(dict):
@@ -418,12 +415,17 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
 #                             |_|
 # Tree Map
 
+class TreeSpecies(Enum):
+    birch = ('Birch', 1)
+    pine = ('Pine', 2)
+    maple = ('Maple', 3)
+
 @dataclass
 class Tree:
+    species: TreeSpecies
     x: int
     y: int
     z: int
-    size: float
     alive: bool
 
 @dataclass
@@ -435,7 +437,8 @@ class TreeMap:
         entities: List[TimberbornEntity] = []
         for tree in self.trees:
             entities.append(
-                TimberbornPineTree(
+                TimberbornTree(
+                    species=tree.species.value[0],
                     Components=TimberbornTreeComponents(
                         BlockObject=TimberbornBlockObject(
                             Coordinates=TimberbornCoordinates(X=tree.x, Y=tree.y, Z=tree.z),
@@ -444,29 +447,43 @@ class TreeMap:
                         CoordinatesOffseter=TimberbornCoordinatesOffseter.random(),
                         Growable=TimberbornGrowable(1.0),
                         LivingNaturalResource=TimberbornLivingNaturalResource(IsDead=not tree.alive),
-                        NaturalResourceModelRandomizer=TimberbornNaturalResourceModelRandomizer.random(tree.size),
+                        NaturalResourceModelRandomizer=TimberbornNaturalResourceModelRandomizer.random(),
                         WateredObject=TimberbornWateredObject(IsDry=not tree.alive),
-                        YielderCuttable=TimberbornYielderCuttable(Id="Log", Amount=2),
+                        YielderCuttable=TimberbornYielderCuttable(Id="Log", Amount=tree.species.value[1]),
                     )
                 )
             )
         return entities
 
-def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: float, filename: Optional[str]):
-    if filename is None:
+@dataclass
+class ImageToTimberbornTreemapSpec:
+    filename: str
+    treeline_cutoff: float = 0.1
+    birch_cutoff: float = 0.4
+    pine_cutoff: float = 0.7
+
+def read_tree_map(heightmap: Heightmap, water_map: WaterMap, spec: Optional[ImageToTimberbornTreemapSpec]):
+    if spec is None:
         return TreeMap([])
 
     print(f'\nReading Treemap')
-    image = read_monochrome_image(filename, heightmap.width, heightmap.height)
+    image = read_monochrome_image(spec.filename, heightmap.width, heightmap.height)
 
     trees = []
     for i, normalized in enumerate(normalized_image_data(image)):
-        if normalized > treeline_cutoff:
-            z = heightmap.data[i]
-            y = math.floor(i / image.width)
-            x = i - y * image.width
-            alive = water_map.moisture[i] > 0
-            trees.append(Tree(x, y, z, normalized, alive))
+        if normalized < spec.treeline_cutoff:
+            continue
+
+        z = heightmap.data[i]
+        y = math.floor(i / image.width)
+        x = i - y * image.width
+        alive = water_map.moisture[i] > 0
+        species = TreeSpecies.maple
+        if normalized < spec.birch_cutoff:
+            species = TreeSpecies.birch
+        elif normalized < spec.pine_cutoff:
+            species = TreeSpecies.pine
+        trees.append(Tree(species, x, y, z, alive))
 
     print(f"Made {len(trees)} trees. {100 * len(trees)/(image.width * image.height):.2f}% tree coverage.")
     return TreeMap(trees)
@@ -476,11 +493,6 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
 # | |\/| / _` | | ' \
 # |_|  |_\__,_|_|_||_|
 # Main
-
-@dataclass
-class ImageToTimberbornTreemapSpec:
-    filename: str
-    treeline_cutoff: float
 
 @dataclass
 class ImageToTimberbornWatermapSpec:
@@ -523,11 +535,7 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, output: str) -> None:
     else:
         water_map = read_water_map(heightmap, spec.watermap.filename)
 
-    if spec.treemap is None:
-        tree_map = read_tree_map(heightmap, water_map, 0, None)
-    else:
-        tree_map = read_tree_map(heightmap, water_map, spec.treemap.treeline_cutoff, spec.treemap.filename)
-
+    tree_map = read_tree_map(heightmap, water_map, spec.treemap)
     singletons = TimberbornSingletons(
         MapSize=heightmap.map_size,
         SoilMoistureSimulator=water_map.soil_moisture_simulator,
@@ -544,6 +552,8 @@ def manual_image_to_timberborn(args: Any) -> None:
         treemap=ImageToTimberbornTreemapSpec(
             filename=args.treemap,
             treeline_cutoff=args.treeline_cutoff,
+            birch_cutoff=args.birch_cutoff,
+            pine_cutoff=args.pine_cutoff,
         )
 
     watermap = None
@@ -581,8 +591,10 @@ def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None
     parser.add_argument('--width', type=int, help='Width of the resulting map. Defaults to image width.', default=-1)
     parser.add_argument('--height', type=int, help='Height of the resulting map. Defaults to image height.', default=-1)
 
-    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image. None by default.', default=None)
-    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn. Defaults to 0.2.', default=0.2)
+    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image.', default=None)
+    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn. Defaults to 0.1.', default=0.1)
+    parser.add_argument('--birch-cutoff', type=float, help='Relative pixel intensity under which trees will spwan as birch trees. Defaults to 0.2.', default=0.4)
+    parser.add_argument('--pine-cutoff', type=float, help='Relative pixel intensity under which trees will spwan as pine trees. Defaults to 0.7.', default=0.7)
 
     parser.add_argument('--water-map', type=str, help='Path to a grayscale water map image. None by default.', default=None)
     parser.set_defaults(func=manual_image_to_timberborn)
