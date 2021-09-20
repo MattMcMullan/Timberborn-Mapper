@@ -9,13 +9,13 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Optional, Tuple, Union
-from PIL import Image
+from PIL import Image, ImageOps
 
-#  __  __           ___                   _   
-# |  \/  |__ _ _ __| __|__ _ _ _ __  __ _| |_ 
+#  __  __           ___                   _
+# |  \/  |__ _ _ __| __|__ _ _ _ __  __ _| |_
 # | |\/| / _` | '_ \ _/ _ \ '_| '  \/ _` |  _|
 # |_|  |_\__,_| .__/_|\___/_| |_|_|_\__,_|\__|
-#             |_|                             
+#             |_|
 # Map Format
 
 class TimberbornSize(dict):
@@ -90,7 +90,7 @@ class TimberbornCoordinatesOffset(dict):
 class TimberbornCoordinatesOffseter(dict):
     def __init__(self, CoordinatesOffset: TimberbornCoordinatesOffset):
         dict.__init__(self, CoordinatesOffset=CoordinatesOffset)
-    
+
     @classmethod
     def random(cls) -> 'TimberbornCoordinatesOffseter':
         return cls(TimberbornCoordinatesOffset(random.random() * 0.25, random.random() * 0.25))
@@ -180,15 +180,16 @@ class TimberbornMap(dict):
             Entities=Entities
         )
 
-#  ___                     _  _                    _ _         _   _          
-# |_ _|_ __  __ _ __ _ ___| \| |___ _ _ _ __  __ _| (_)_____ _| |_(_)___ _ _  
-# | || '  \/ _` / _` / -_) .` / _ \ '_| '  \/ _` | | |_ / _` |  _| / _ \ ' \ 
+#  ___                     _  _                    _ _         _   _
+# |_ _|_ __  __ _ __ _ ___| \| |___ _ _ _ __  __ _| (_)_____ _| |_(_)___ _ _
+# | || '  \/ _` / _` / -_) .` / _ \ '_| '  \/ _` | | |_ / _` |  _| / _ \ ' \
 # |___|_|_|_\__,_\__, \___|_|\_\___/_| |_|_|_\__,_|_|_/__\__,_|\__|_\___/_||_|
-#               |___/                                                        
+#               |___/
 # Image Normalization
 
 def read_monochrome_image(filename: str, width: int, height: int) -> Image.Image:
     image = Image.open(filename)
+    image = ImageOps.mirror(image) #Timberborn's map array structures are mirrored horizontally:
     print(f'Image Size: {image.size}')
 
     image = image.convert('I')
@@ -199,7 +200,7 @@ def read_monochrome_image(filename: str, width: int, height: int) -> Image.Image
     if height > 0:
         print(f'Adjusting height to {height}')
         image = image.resize((image.width, height))
-    
+
     return image
 
 def normalized_image_data(image: Image.Image) -> List[float]:
@@ -215,11 +216,11 @@ def normalized_image_data(image: Image.Image) -> List[float]:
 
     return result
 
-#  _  _     _      _   _                   
-# | || |___(_)__ _| |_| |_ _ __  __ _ _ __ 
+#  _  _     _      _   _
+# | || |___(_)__ _| |_| |_ _ __  __ _ _ __
 # | __ / -_) / _` | ' \  _| '  \/ _` | '_ \
 # |_||_\___|_\__, |_||_\__|_|_|_\__,_| .__/
-#            |___/                   |_|   
+#            |___/                   |_|
 # Heightmap
 
 @dataclass
@@ -233,7 +234,7 @@ class Heightmap:
     @property
     def map_size(self) -> TimberbornMapSize:
         return TimberbornMapSize(TimberbornSize(self.width, self.height))
-    
+
     @property
     def terrain_map(self) -> TimberbornTerrainMap:
         return TimberbornTerrainMap(TimberbornArray(self.data))
@@ -271,7 +272,7 @@ class ImageToTimberbornHeightmapSpec:
         self.bucketized_conversion = bucketized_conversion
 
         assert self.linear_conversion is None or self.bucketized_conversion is None, 'Linear heightmap conversion and bucketized heightmap conversion are mutually exclusive'
-        
+
         if self.linear_conversion is None and self.bucketized_conversion is None:
             self.linear_conversion = ImageToTimberbornHeightmapLinearConversionSpec()
 
@@ -323,11 +324,11 @@ def read_heightmap(width: int, height: int, spec: ImageToTimberbornHeightmapSpec
         data=height_data,
     )
 
-# __      __    _           __  __           
-# \ \    / /_ _| |_ ___ _ _|  \/  |__ _ _ __ 
+# __      __    _           __  __
+# \ \    / /_ _| |_ ___ _ _|  \/  |__ _ _ __
 #  \ \/\/ / _` |  _/ -_) '_| |\/| / _` | '_ \
 #   \_/\_/\__,_|\__\___|_| |_|  |_\__,_| .__/
-#                                      |_|   
+#                                      |_|
 # Water Map
 
 @dataclass
@@ -336,7 +337,7 @@ class WaterMap:
     moisture: List[float]
     width: int
     height: int
-    
+
     @property
     def water_map(self) -> TimberbornWaterMap:
         return TimberbornWaterMap(TimberbornArray(self.depths), TimberbornArray(['0:0:0:0'] * self.width * self.height))
@@ -375,7 +376,7 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
             else:
                 row.append(100)
         distance.append(row)
-    
+
     def transfer_value(x: int, y: int, dx: int, dy: int) -> float:
         if x + dx < 0 or x + dx >= image.height or y + dy < 0 or y + dy >= image.height:
             return 100
@@ -410,11 +411,11 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str]) -> Heightmap:
         image.size[1]
     )
 
-#  _____            __  __           
-# |_   _| _ ___ ___|  \/  |__ _ _ __ 
+#  _____            __  __
+# |_   _| _ ___ ___|  \/  |__ _ _ __
 #  | || '_/ -_) -_) |\/| / _` | '_ \
 #  |_||_| \___\___|_|  |_\__,_| .__/
-#                             |_|   
+#                             |_|
 # Tree Map
 
 @dataclass
@@ -470,11 +471,11 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, treeline_cutoff: fl
     print(f"Made {len(trees)} trees. {100 * len(trees)/(image.width * image.height):.2f}% tree coverage.")
     return TreeMap(trees)
 
-#  __  __      _      
-# |  \/  |__ _(_)_ _  
-# | |\/| / _` | | ' \ 
+#  __  __      _
+# |  \/  |__ _(_)_ _
+# | |\/| / _` | | ' \
 # |_|  |_\__,_|_|_||_|
-# Main                    
+# Main
 
 @dataclass
 class ImageToTimberbornTreemapSpec:
@@ -521,7 +522,7 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, output: str) -> None:
         water_map = read_water_map(heightmap, None)
     else:
         water_map = read_water_map(heightmap, spec.watermap.filename)
-    
+
     if spec.treemap is None:
         tree_map = read_tree_map(heightmap, water_map, 0, None)
     else:
@@ -544,42 +545,46 @@ def manual_image_to_timberborn(args: Any) -> None:
             filename=args.treemap,
             treeline_cutoff=args.treeline_cutoff,
         )
-    
+
     watermap = None
     if args.water_map is not None:
         watermap=ImageToTimberbornWatermapSpec(
             filename=args.water_map,
         )
-    
+
+    output = args.output
+    if not output:
+        output = os.path.splitext(args.input)[0] + '.json'
+
     image_to_timberborn(
         ImageToTimberbornSpec(
             width=args.width,
             height=args.height,
             heightmap=ImageToTimberbornHeightmapSpec(
-                filename=args.heightmap,
-                linear_conversion=ImageToTimberbornHeightmapLinearConversionSpec(min_height=args.min_height, max_height=args.max_height) if not args.bucketize_heightmap else None,
-                bucketized_conversion=ImageToTimberbornHeightmapBucketizedConversionSpec() if args.bucketize_heightmap else None,
+                filename=args.input,
+                linear_conversion=ImageToTimberbornHeightmapLinearConversionSpec(min_height=args.min_height, max_height=args.max_height),# if not args.bucketize_heightmap else None,
+                bucketized_conversion=None,#ImageToTimberbornHeightmapBucketizedConversionSpec() if args.bucketize_heightmap else None,
             ),
             treemap=treemap,
             watermap=watermap,
         ),
-        args.output,
+        output,
     )
 
 def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('heightmap', type=str, help='Path to a grayscale heightmap image.')
-    parser.add_argument('output', type=str, help='Path to output the resulting map to.')
+    parser.add_argument('input', type=str, help='Path to a grayscale heightmap image.')
+    parser.add_argument('--output', type=str, help='Path to output the resulting map to. Defaults to input file name, with json ext.')
 
-    parser.add_argument('--min-height', type=int, help='Soil depth at the lowest point in the heightmap.', default=3)
-    parser.add_argument('--max-height', type=int, help='Soil depth at the highest point in the heightmap.', default=16)
-    parser.add_argument('--bucketize-heightmap', action='store_true', help='Use a specific proportion of height values rather than linearly interpolating the image value between the min and max height. Use a spec file to specify non-default bucket weights.')
-    parser.add_argument('--width', type=int, help='Width of the resulting map.', default=-1)
-    parser.add_argument('--height', type=int, help='Height of the resulting map.', default=-1)
+    parser.add_argument('--min-height', type=int, help='Soil depth at the lowest point in the heightmap. Defaults to 3.', default=3)
+    parser.add_argument('--max-height', type=int, help='Soil depth at the highest point in the heightmap. Defaults to 16.', default=16)
+    #parser.add_argument('--bucketize-heightmap', action='store_true', help='Use a specific proportion of height values rather than linearly interpolating the image value between the min and max height. Use a spec file to specify non-default bucket weights.')
+    parser.add_argument('--width', type=int, help='Width of the resulting map. Defaults to image width.', default=-1)
+    parser.add_argument('--height', type=int, help='Height of the resulting map. Defaults to image height.', default=-1)
 
-    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image.', default=None)
-    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn.', default=0.2)
+    parser.add_argument('--treemap', type=str, help='Path to a grayscale treemap image. None by default.', default=None)
+    parser.add_argument('--treeline-cutoff', type=float, help='Relative pixel intensity under which trees will not spawn. Defaults to 0.2.', default=0.2)
 
-    parser.add_argument('--water-map', type=str, help='Path to a grayscale water map image.', default=None)
+    parser.add_argument('--water-map', type=str, help='Path to a grayscale water map image. None by default.', default=None)
     parser.set_defaults(func=manual_image_to_timberborn)
 
 @contextlib.contextmanager
@@ -596,18 +601,21 @@ def specfile_to_timberborn(args: Any) -> None:
         specdict = json.load(f)
 
     with change_cwd(os.path.dirname(args.input)):
-        image_to_timberborn(ImageToTimberbornSpec(**specdict), args.output)
+        output = args.output
+        if not output:
+            output = os.path.splitext(args.input)[0] + '.json'
+        image_to_timberborn(ImageToTimberbornSpec(**specdict), output)
 
 def add_specfile_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('input', type=str, help='Path to the json specfile which defines what to convert into a timberborn map.')
-    parser.add_argument('output', type=str, help='Path to output the resulting map to.')
+    parser.add_argument('--output', type=str, help='Path to output the resulting map to. Defaults to input file name, with json ext.')
     parser.set_defaults(func=specfile_to_timberborn)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Tool for manipulating timberborn custom maps.')
     subparsers = parser.add_subparsers()
-    add_manual_image_to_timberborn_args(subparsers.add_parser('manual-image-to-timberborn', help='Turn one or more specified images into a timberborn custom map.'))
-    add_specfile_to_timberborn_args(subparsers.add_parser('specfile-to-timberborn', help='Use a json specification to define how to turn images into a timberborn map.'))
+    add_manual_image_to_timberborn_args(subparsers.add_parser('manual-image-to-timberborn', help='Turn one or more specified images into a timberborn custom map.', aliases=['m','man','manual', 'png', 'tif']))
+    add_specfile_to_timberborn_args(subparsers.add_parser('specfile-to-timberborn', help='Use a json specification to define how to turn images into a timberborn map.', aliases=['s','spec', 'specfile', 'json']))
 
     args = parser.parse_args()
     args.func(args)
