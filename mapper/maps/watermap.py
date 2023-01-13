@@ -1,0 +1,93 @@
+# __      __    _           __  __
+# \ \    / /_ _| |_ ___ _ _|  \/  |__ _ _ __
+#  \ \/\/ / _` |  _/ -_) '_| |\/| / _` | '_ \
+#   \_/\_/\__,_|\__\___|_| |_|  |_\__,_| .__/
+#                                      |_|
+# Water Map
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
+from image_utils import MapImage
+from maps.format import TimberbornArray, TimberbornSoilMoistureSimulator, TimberbornWaterMap
+
+from .heightmap import Heightmap
+
+
+@dataclass
+class WaterMap:
+    depths: List[float]
+    moisture: List[float]
+    width: int
+    height: int
+
+    @property
+    def water_map(self) -> TimberbornWaterMap:
+        return TimberbornWaterMap(TimberbornArray(self.depths), TimberbornArray(["0:0:0:0"] * self.width * self.height))
+
+    @property
+    def soil_moisture_simulator(self) -> TimberbornSoilMoistureSimulator:
+        return TimberbornSoilMoistureSimulator(TimberbornArray(self.moisture))
+
+    def get(self, x: int, y: int) -> int:
+        assert x < self.width
+        assert y < self.height
+        return self.depths[x + y * self.width]
+
+
+def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional[Path]) -> Heightmap:
+
+    if filename is None:
+        return WaterMap(
+            [0] * heightmap.width * heightmap.height,
+            [0] * heightmap.width * heightmap.height,
+            heightmap.width,
+            heightmap.height,
+        )
+    else:
+        filepath = path / filename
+
+    print(f"\nReading Water Map")
+    map_image = MapImage(filepath, heightmap.width, heightmap.height)
+    depths = map_image.rounded_normalized_data
+    image = map_image.image
+
+    # Generate a soil moisture map from the water map
+    distance: List[List[float]] = []
+    for x in range(image.width):
+        row = []
+        for y in range(image.height):
+            if depths[x + y * image.height] > 0:
+                row.append(0)
+            else:
+                row.append(100)
+        distance.append(row)
+
+    def transfer_value(x: int, y: int, dx: int, dy: int) -> float:
+        if x + dx < 0 or x + dx >= image.height or y + dy < 0 or y + dy >= image.height:
+            return 100
+
+        horizontal = abs(dx) + abs(dy)
+        if horizontal == 2:
+            horizontal = 1.41
+
+        za = heightmap.get(x, y)
+        zb = heightmap.get(x + dx, y + dy)
+        vertical = abs(za - zb) * 4
+        return distance[x + dx][y + dy] + horizontal + vertical
+
+    for i in range(16):
+        for x in range(image.width):
+            for y in range(image.height):
+                min_distance = distance[x][y]
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        min_distance = min(min_distance, transfer_value(x, y, dx, dy))
+                distance[x][y] = min_distance
+
+    moisture = []
+    for x in range(image.width):
+        for y in range(image.height):
+            moisture.append(max(16 - distance[y][x], 0))
+
+    return WaterMap(depths, moisture, image.size[0], image.size[1])
