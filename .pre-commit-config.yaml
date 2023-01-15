@@ -7,7 +7,7 @@ repos:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
     -   id: check-added-large-files
-        args: ['--maxkb=4096']
+        args: ['--maxkb=20000']
 -   repo: https://gitlab.com/pycqa/flake8
     rev: '5.0.4'  # pick a git hash / tag to point to
     hooks:
