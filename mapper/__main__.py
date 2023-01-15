@@ -5,6 +5,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha1
 from pathlib import Path
 from platform import python_version
 from time import time
@@ -23,7 +24,7 @@ from maps.watermap import read_water_map
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.3-a-3"
+__version__ = "0.3.4-a-1"
 
 
 class GameDefs(Enum):
@@ -95,11 +96,17 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         WaterMap=water_map.water_map,
     )
     timber_map = TimberbornMap("0", singletons, tree_map.entities)
+
+    if logging.root.level == logging.DEBUG:
+        data = json.dumps(heightmap.terrain_map)
+        maphash = sha1(data.encode('utf-8')).hexdigest()
+        logging.debug(f"Terrain data hash: sha1 {maphash}")
+
     try:
         with open(output_path, "w") as f:
             json.dump(timber_map, f, indent=4)
     except (OSError, PermissionError) as exc:
-        print(
+        logging.error(
             " ! Couldn't write to output path due to following error:"
             "(Perhaps output path is incorrect or has permission denied)"
         )
@@ -175,8 +182,37 @@ def specfile_to_timberborn(args: Any) -> None:
     image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path)
 
 
-def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("input", type=Path, help="Path to a grayscale heightmap image.")
+def main() -> None:
+
+    colorama.init()
+    R = colorama.Style.RESET_ALL
+    H1 = colorama.Fore.BLUE
+    # H2 = colorama.Fore.GREEN
+    BOLD = colorama.Style.BRIGHT
+    CODE = colorama.Back.WHITE + colorama.Fore.BLACK
+
+    description = (
+        f"Tool for importing heightmap images as Timberborn custom maps.\n"
+        f"\n  {BOLD}HOW TO USE:{R}\n\n"
+        f"It has 2 modes: '{H1}{BOLD}m{R}anual' and '{H1}{BOLD}s{R}pecfile'\n"
+        f'Run "{BOLD}mapper m -h{R}" or "{BOLD}mapper s -h{R}" to see actual arguments for each mode.\n\n'
+        f"Manual mode takes as input a path to an heightmap (image) file and a number of options\n"
+        f"like desired map height and width or base elevation. It can also take separate tree and water maps.\n"
+        f"Try example command:\n"
+        f"> {CODE}mapper m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
+        f"Output will be zipped JSON file with {H1}{BOLD}{GameDefs.MAP_SUFFIX.value}{R} extension that should be ready to be"
+        f" opened with {BOLD}{H1}map editor{R}."
+    )
+
+    parser = argparse.ArgumentParser(
+        description=description,
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+
+    parser.add_argument("input", type=Path, help="Path to a heightmap image or json spec file")
+    parser.add_argument(
+        "--output", type=Path, help="Path to output the resulting map to. Defaults to input file name, with timber ext."
+    )
 
     parser.add_argument(
         "--min-elevation", "--min-height", "--low", type=int,
@@ -217,54 +253,14 @@ def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None
     )
 
     parser.add_argument("--water-map", type=str, help="Path to a grayscale water map image. None by default.", default=None)
-    parser.set_defaults(func=manual_image_to_timberborn)
 
-
-def add_specfile_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "input", type=Path, help="Path to the json specfile which defines what to convert into a timberborn map."
-    )
-    parser.set_defaults(func=specfile_to_timberborn)
-
-
-def main() -> None:
-
-    colorama.init()
-    R = colorama.Style.RESET_ALL
-    H1 = colorama.Fore.BLUE
-    # H2 = colorama.Fore.GREEN
-    BOLD = colorama.Style.BRIGHT
-    CODE = colorama.Back.WHITE + colorama.Fore.BLACK
-
-    description = (
-        f"Tool for importing heightmap images as Timberborn custom maps.\n"
-        f"\n  {BOLD}HOW TO USE:{R}\n\n"
-        f"It has 2 modes: '{H1}{BOLD}m{R}anual' and '{H1}{BOLD}s{R}pecfile'\n"
-        f'Run "{BOLD}mapper m -h{R}" or "{BOLD}mapper s -h{R}" to see actual arguments for each mode.\n\n'
-        f"Manual mode takes as input a path to an heightmap (image) file and a number of options\n"
-        f"like desired map height and width or base elevation. It can also take separate tree and water maps.\n"
-        f"Try example command:\n"
-        f"> {CODE}mapper m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
-        f"Output will be zipped JSON file with {H1}{BOLD}{GameDefs.MAP_SUFFIX.value}{R} extension that should be ready to be"
-        f" opened with {BOLD}{H1}map editor{R}."
-    )
-    parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
-        "--output", type=Path, help="Path to output the resulting map to. Defaults to input file name, with timber ext."
-    )
-    parent_parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
+    parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
                                help='control additional output verbosity')
-    parent_parser.add_argument('-C', '--nocolor', action="store_true", help='disable usage of colors in console')
-
-    parser = argparse.ArgumentParser(
-        description=description,
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
+    parser.add_argument('-C', '--nocolor', action="store_true", help='disable usage of colors in console')
 
     # parser.add_argument("input", type=Path, nargs='?', help="Path to a grayscale heightmap image.")
 
-    subparsers = parser.add_subparsers(dest='mode')
-
+    """
     add_manual_image_to_timberborn_args(
         subparsers.add_parser(
             "manual-image-to-timberborn",
@@ -282,6 +278,7 @@ def main() -> None:
             parents=[parent_parser]
         )
     )
+    """
     # parser.add_argument("input", type=Path, nargs='?', help="Path to a grayscale heightmap image.")
 
     args = parser.parse_args()
@@ -307,7 +304,12 @@ def main() -> None:
     if not args.input.is_file():
         sys.exit(f"Path `{args.input}` is not a file or not accessible. Please check it and try again.")
 
-    args.func(args)
+    if args.input.suffix.lower() == ".json":
+        logging.info("JSON file will be processed as spec file")
+        specfile_to_timberborn(args)
+    else:
+        logging.info("File will be verified and processed like an image")
+        manual_image_to_timberborn(args)
 
 
 if __name__ == "__main__":
