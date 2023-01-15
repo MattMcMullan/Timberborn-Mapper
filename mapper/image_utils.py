@@ -4,6 +4,7 @@
 # |___|_|_|_\__,_\__, \___|_|\_\___/_| |_|_|_\__,_|_|_/__\__,_|\__|_\___/_||_|
 #               |___/
 # Image Normalization
+import logging
 from pathlib import Path
 from typing import List
 
@@ -12,16 +13,24 @@ from PIL import Image, ImageOps
 
 def read_monochrome_image(filename: Path, width: int, height: int) -> Image.Image:
     image = Image.open(filename)
+
+    try:
+        image.verify()
+    except Exception as exc:
+        logging.critical("Couldn't verify '%s' as image file, it might be broken or not an image.", filename)
+        raise exc
+    image = Image.open(filename)  # it has to be re-opened after verify()
+
     image = ImageOps.mirror(image)  # Timberborn's map array structures are mirrored horizontally:
-    print(f"Image Size: {image.size}")
+    logging.info(f"Image Size: {image.size}")
 
     image = image.convert("I")
     if width > 0:
-        print(f"Adjusting width to {width}")
+        logging.info(f"Adjusting width to {width}")
         image = image.resize((width, image.height))
 
     if height > 0:
-        print(f"Adjusting height to {height}")
+        logging.info(f"Adjusting height to {height}")
         image = image.resize((image.width, height))
 
     return image

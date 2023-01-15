@@ -24,7 +24,7 @@ from maps.watermap import read_water_map
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.4-a-1"
+__version__ = "0.3.4-b-1"
 
 
 class GameDefs(Enum):
@@ -119,7 +119,7 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
             timberzip.write(output_path, arcname=arcname)
         # TODO conditional
         output_path.unlink()
-        print(f"\nSaved to `{timber_path}`\nYou can now open it in Timberborn map editor to add finishing touches")
+        print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
     return timber_path
 
 
@@ -127,8 +127,8 @@ def make_output_path(args: Any) -> Path:
     output_path = args.output
     if output_path:
         if output_path.suffix != GameDefs.MAP_SUFFIX.value:
-            logging.warning(f" !output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
-                            f" it will be changed automatically")
+            logging.warning(f"output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
+                            f" it will be changed automatically.")
     else:
         output_path = args.input.with_suffix(".tmp")
     if not output_path.is_absolute():
@@ -183,7 +183,7 @@ def specfile_to_timberborn(args: Any) -> None:
 
 
 def main() -> None:
-
+    t = -time()
     colorama.init()
     R = colorama.Style.RESET_ALL
     H1 = colorama.Fore.BLUE
@@ -191,17 +191,27 @@ def main() -> None:
     BOLD = colorama.Style.BRIGHT
     CODE = colorama.Back.WHITE + colorama.Fore.BLACK
 
+    # try to guess script name ('python mapper' vs 'TimberbornMapper.exe')
+    script = "mapper"
+    for arg in sys.argv:
+        if arg.lower().endswith('.exe'):
+            script = arg
+            break
+
     description = (
         f"Tool for importing heightmap images as Timberborn custom maps.\n"
         f"\n  {BOLD}HOW TO USE:{R}\n\n"
-        f"It has 2 modes: '{H1}{BOLD}m{R}anual' and '{H1}{BOLD}s{R}pecfile'\n"
-        f'Run "{BOLD}mapper m -h{R}" or "{BOLD}mapper s -h{R}" to see actual arguments for each mode.\n\n'
-        f"Manual mode takes as input a path to an heightmap (image) file and a number of options\n"
-        f"like desired map height and width or base elevation. It can also take separate tree and water maps.\n"
-        f"Try example command:\n"
-        f"> {CODE}mapper m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
-        f"Output will be zipped JSON file with {H1}{BOLD}{GameDefs.MAP_SUFFIX.value}{R} extension that should be ready to be"
-        f" opened with {BOLD}{H1}map editor{R}."
+        f" Script has 2 modes: {BOLD}manual{R} and {BOLD}specfile{R}\n"
+        f" - {BOLD}Manual{R} mode takes as input a path to an heightmap (image) file and a number of options\n"
+        f" - {BOLD}Specfile{R} mode pulls all map option from a json-formatted file\n\n"
+        f" If you are using a binary version you can just {BOLD}drag-n-drop{R} image or spec file on executable or it's link.\n"
+        f" (but then you can't set options directly)\n\n"
+        f' Run "{BOLD}{script} m -h{R}" or "{BOLD}{script} s -h{R}" to see actual arguments for each mode, \n'
+        f" like desired map height and width or base elevation. It can also take separate tree and water maps.\n\n"
+        f" Try example command:\n"
+        f" {CODE}{script} m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
+        f" Output will be zipped JSON file with {H1}{BOLD}{GameDefs.MAP_SUFFIX.value}{R} extension that should be ready to be"
+        f"  opened with {BOLD}{H1}map editor{R}."
     )
 
     parser = argparse.ArgumentParser(
@@ -255,34 +265,12 @@ def main() -> None:
     parser.add_argument("--water-map", type=str, help="Path to a grayscale water map image. None by default.", default=None)
 
     parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
-                               help='control additional output verbosity')
-    parser.add_argument('-C', '--nocolor', action="store_true", help='disable usage of colors in console')
+                               help='Control additional output verbosity')
+    parser.add_argument('-C', '--nocolor', action="store_true", help='Disable usage of colors in console')
 
-    # parser.add_argument("input", type=Path, nargs='?', help="Path to a grayscale heightmap image.")
-
-    """
-    add_manual_image_to_timberborn_args(
-        subparsers.add_parser(
-            "manual-image-to-timberborn",
-            help="Turn one or more specified images into a timberborn custom map.",
-            aliases=["m", "man", "manual"],
-            parents=[parent_parser]
-        )
-    )
-
-    add_specfile_to_timberborn_args(
-        subparsers.add_parser(
-            "specfile-to-timberborn",
-            help="Use a json specification to define how to turn images into a timberborn map.",
-            aliases=["s", "spec", "specfile"],
-            parents=[parent_parser]
-        )
-    )
-    """
-    # parser.add_argument("input", type=Path, nargs='?', help="Path to a grayscale heightmap image.")
+    parser.add_argument('-I', '--non-interactive', action='store_true', help="Disable interactions")
 
     args = parser.parse_args()
-    print(args)
 
     # configure logging
     loglevel = getattr(args, "loglevel", "INFO").upper()
@@ -293,8 +281,8 @@ def main() -> None:
 
     if getattr(args, 'nocolor', False):
         colorama.init(strip=True)
-    print(f"{BOLD}Timberborn Mapper{R} ver. {H1}{__version__}{R} running on python {H1}{python_version()}{R}")
-    # logging.debug(Path(__file__).name)
+    print(f"{BOLD}Timberborn Mapper{R} ver. {H1}{BOLD}{__version__}{R} running on python {H1}{python_version()}{R}")
+    logging.debug(f"Script name is guessed as '{script}'")
 
     if not args.input.is_absolute():
         args.input = Path.cwd() / args.input
@@ -304,16 +292,27 @@ def main() -> None:
     if not args.input.is_file():
         sys.exit(f"Path `{args.input}` is not a file or not accessible. Please check it and try again.")
 
-    if args.input.suffix.lower() == ".json":
-        logging.info("JSON file will be processed as spec file")
-        specfile_to_timberborn(args)
-    else:
-        logging.info("File will be verified and processed like an image")
-        manual_image_to_timberborn(args)
+    # wrapping execution in exception catcher to halt window form closing in interactive mode
+    try:
+        if args.input.suffix.lower() == ".json":
+            logging.info("JSON file will be processed as spec file")
+            specfile_to_timberborn(args)
+        else:
+            logging.info("File will be verified and processed like an image")
+            manual_image_to_timberborn(args)
+    except Exception as exc:
+        logging.critical("Exception happened!")
+        if not args.non_interactive:
+            logging.critical("Following error happened during execution:")
+            logging.critical(exc)
+            input('(Press enter to throw traceback and exit. Run from console to see details if window closes)')
+            raise exc
+
+    t += time()
+    if not args.non_interactive:
+        input('(Press enter to exit)')
+    logging.info(f"\nTotal execution time: {t:.2f} sec.")
 
 
 if __name__ == "__main__":
-    t = -time()
     main()
-    t += time()
-    print(f"\nTotal execution time: {t:.2f} sec.")
