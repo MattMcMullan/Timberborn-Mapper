@@ -4,6 +4,7 @@
 #  |_||_| \___\___|_|  |_\__,_| .__/
 #                             |_|
 # Tree Map
+import logging
 import math
 from dataclasses import dataclass
 from enum import Enum
@@ -11,20 +12,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from image_utils import MapImage
-from maps.format import (
-    TimberbornBlockObject,
-    TimberbornCoordinates,
-    TimberbornCoordinatesOffseter,
-    TimberbornEntity,
-    TimberbornGrowable,
-    TimberbornLivingNaturalResource,
-    TimberbornNaturalResourceModelRandomizer,
-    TimberbornOrientation,
-    TimberbornTree,
-    TimberbornTreeComponents,
-    TimberbornWateredObject,
-    TimberbornYielderCuttable,
-)
+from maps.format import (TimberbornBlockObject, TimberbornCoordinates, TimberbornCoordinatesOffseter, TimberbornEntity,
+                         TimberbornGrowable, TimberbornLivingNaturalResource, TimberbornNaturalResourceModelRandomizer,
+                         TimberbornOrientation, TimberbornTree, TimberbornTreeComponents, TimberbornWateredObject,
+                         TimberbornYielderCuttable)
 
 from .heightmap import Heightmap
 from .watermap import WaterMap
@@ -85,7 +76,7 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
     if spec is None:
         return TreeMap([])
 
-    print(f"\nReading Treemap")
+    print("\nReading Treemap")
     filepath = path / spec.filename
 
     map_image = MapImage(filepath, heightmap.width, heightmap.height)
@@ -107,5 +98,5 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
             species = TreeSpecies.pine
         trees.append(Tree(species, x, y, z, alive))
 
-    print(f"Made {len(trees)} trees. {100 * len(trees)/(image.width * image.height):.2f}% tree coverage.")
+    logging.info(f"Made {len(trees)} trees. {100 * len(trees)/(image.width * image.height):.2f}% tree coverage.")
     return TreeMap(trees)

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import logging
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from platform import python_version
 from time import time
 from typing import Any, Optional, Union
 from zipfile import ZIP_DEFLATED, ZipFile
 
+import colorama
 from maps.format import TimberbornMap, TimberbornSingletons
 from maps.heightmap import ImageToTimberbornHeightmapLinearConversionSpec, ImageToTimberbornHeightmapSpec, read_heightmap
 from maps.treemap import ImageToTimberbornTreemapSpec, read_tree_map
@@ -20,10 +23,14 @@ from maps.watermap import read_water_map
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.1-a-2"
+__version__ = "0.3.3-a-2"
 
 
-MAP_SUFFIX = ".timber"
+class GameDefs(Enum):
+    """ Game default values and properties """
+    MAP_SUFFIX = ".timber"
+    MAX_ELEVATION = 16
+    MAX_MAP_SIZE = 256
 
 
 @dataclass
@@ -64,22 +71,22 @@ class ImageToTimberbornSpec:
 
 def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Path) -> Path:
 
-    print(f" output dir: `{output_path.parent}`")
+    logging.info(f"output dir: `{output_path.parent}`")
 
     t = -time()
     heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path)
-    print(f"Finished in {t + time():.2f} sec.")
+    logging.info(f"Finished in {t + time():.2f} sec.")
 
     t = -time()
     if spec.watermap is None:
         water_map = read_water_map(heightmap, None, None)
     else:
         water_map = read_water_map(heightmap, filename=spec.watermap.filename, path=path)
-    print(f"Finished water map in {t + time():.2f} sec.")
+    logging.info(f"Finished water map in {t + time():.2f} sec.")
 
     t = -time()
     tree_map = read_tree_map(heightmap, water_map, spec=spec.treemap, path=path)
-    print(f"Finished tree map in {t + time():.2f} sec.")
+    logging.info(f"Finished tree map in {t + time():.2f} sec.")
 
     singletons = TimberbornSingletons(
         MapSize=heightmap.map_size,
@@ -112,8 +119,9 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
 def make_output_path(args: Any) -> Path:
     output_path = args.output
     if output_path:
-        if output_path.suffix != MAP_SUFFIX:
-            print(f" !output extension ('{output_path.suffix}') is not '{MAP_SUFFIX}'" f" it will be changed automatically")
+        if output_path.suffix != GameDefs.MAP_SUFFIX.value:
+            logging.warning(f" !output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
+                            f" it will be changed automatically")
     else:
         output_path = args.input.with_suffix(".tmp")
     if not output_path.is_absolute():
@@ -146,7 +154,7 @@ def manual_image_to_timberborn(args: Any) -> None:
             heightmap=ImageToTimberbornHeightmapSpec(
                 filename=args.input,
                 linear_conversion=ImageToTimberbornHeightmapLinearConversionSpec(
-                    min_height=args.min_height, max_height=args.max_height
+                    min_height=args.min_elevation, max_height=args.max_elevation
                 ),  # if not args.bucketize_heightmap else None,
                 # ImageToTimberbornHeightmapBucketizedConversionSpec() if args.bucketize_heightmap else None,
                 bucketized_conversion=None,
@@ -159,17 +167,25 @@ def manual_image_to_timberborn(args: Any) -> None:
     )
 
 
+def specfile_to_timberborn(args: Any) -> None:
+    with open(args.input, "r") as f:
+        specdict = json.load(f)
+
+    output_path = make_output_path(args)
+    image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path)
+
+
 def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("input", type=Path, help="Path to a grayscale heightmap image.")
-    parser.add_argument(
-        "--output", type=Path, help="Path to output the resulting map to. Defaults to input file name, with json ext."
-    )
 
     parser.add_argument(
-        "--min-height", type=int, help="Soil depth at the lowest point in the heightmap. Defaults to 3.", default=3
+        "--min-elevation", "--min-height", "--low", type=int,
+        help="Soil elevation at the lowest point in the heightmap. Defaults to 3.", default=3,
     )
     parser.add_argument(
-        "--max-height", type=int, help="Soil depth at the highest point in the heightmap. Defaults to 16.", default=16
+        "--max-elevation", "--max-height", "--high", type=int,
+        help=f"Soil elevation at the highest point in the heightmap. Defaults to {GameDefs.MAX_ELEVATION.value}.",
+        default=GameDefs.MAX_ELEVATION.value
     )
     # parser.add_argument(
     #     "--bucketize-heightmap",
@@ -204,64 +220,83 @@ def add_manual_image_to_timberborn_args(parser: argparse.ArgumentParser) -> None
     parser.set_defaults(func=manual_image_to_timberborn)
 
 
-def specfile_to_timberborn(args: Any) -> None:
-    with open(args.input, "r") as f:
-        specdict = json.load(f)
-
-    output_path = make_output_path(args)
-    image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path)
-
-
 def add_specfile_to_timberborn_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "input", type=Path, help="Path to the json specfile which defines what to convert into a timberborn map."
-    )
-    parser.add_argument(
-        "--output", type=Path, help="Path to output the resulting map to. Defaults to input file name, with json ext."
     )
     parser.set_defaults(func=specfile_to_timberborn)
 
 
 def main() -> None:
-    print(f"Timberborn Mapper ver. {__version__} running on python {python_version()}")
-    description = f"""
-        Tool for importing heightmap images as Timberborn custom maps.
 
-        HOW TO USE:
+    colorama.init()
+    R = colorama.Style.RESET_ALL
+    H1 = colorama.Fore.BLUE
+    # H2 = colorama.Fore.GREEN
+    BOLD = colorama.Style.BRIGHT
+    CODE = colorama.Back.BLUE + colorama.Fore.BLACK
 
-        It has 2 modes: "(m)anual" and "(s)pecfile"
-        Run "mapper m -h" or "mapper s -h" to see actual arguments for each mode
-        Try example provided: 'mapper m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128`
-
-        Output will be zipped JSON file with '{MAP_SUFFIX}' extension that should be ready to be opened with map editor.
-        """
+    description = (
+        f"Tool for importing heightmap images as Timberborn custom maps.\n"
+        f"\n  {BOLD}HOW TO USE:{R}\n\n"
+        f"It has 2 modes: '{H1}{BOLD}m{R}anual' and '{H1}{BOLD}s{R}pecfile'\n"
+        f'Run "{BOLD}mapper m -h{R}" or "{BOLD}mapper s -h{R}" to see actual arguments for each mode.\n\n'
+        f"Manual mode takes as input a path to an heightmap (image) file and a number of options\n"
+        f" like desired map height and width or base elevation. It can also take separate tree and water maps.\n"
+        f"Try example command:\n"
+        f"> {CODE}mapper m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
+        f"Output will be zipped JSON file with '{H1}{GameDefs.MAP_SUFFIX.value}{R}' extension that should be ready to be"
+        f" opened with {BOLD}{H1}map editor{R}."
+    )
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument(
+        "--output", type=Path, help="Path to output the resulting map to. Defaults to input file name, with timber ext."
+    )
+    parent_parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
+                               help='control additional output verbosity')
+    parent_parser.add_argument('-C', '--nocolor', action="store_true", help='disable usage of colors in console')
 
     parser = argparse.ArgumentParser(
         description=description,
         formatter_class=argparse.RawTextHelpFormatter,
     )
     subparsers = parser.add_subparsers()
+
     add_manual_image_to_timberborn_args(
         subparsers.add_parser(
             "manual-image-to-timberborn",
             help="Turn one or more specified images into a timberborn custom map.",
             aliases=["m", "man", "manual", "png", "tif"],
+            parents=[parent_parser]
         )
     )
+
     add_specfile_to_timberborn_args(
         subparsers.add_parser(
             "specfile-to-timberborn",
             help="Use a json specification to define how to turn images into a timberborn map.",
             aliases=["s", "spec", "specfile", "json"],
+            parents=[parent_parser]
         )
     )
 
     args = parser.parse_args()
 
+    # configure logging
+    logging.basicConfig(
+        level=getattr(logging, args.loglevel.upper()),
+        format=f'{H1}%(levelname)s{R}: %(message)s'
+    )
+
+    if args.nocolor:
+        colorama.init(strip=True)
+    print(f"{BOLD}Timberborn Mapper{R} ver. {H1}{__version__}{R} running on python {H1}{python_version()}{R}")
+    logging.debug(Path(__file__).name)
+
     if not args.input.is_absolute():
         args.input = Path.cwd() / args.input
 
-    print(f" input path: `{args.input}`")
+    logging.info(f"input path: `{args.input}`")
 
     if not args.input.is_file():
         sys.exit(f"Path `{args.input}` is not a file or not accessible. Please check it and try again.")

@@ -4,8 +4,10 @@
 #   \_/\_/\__,_|\__\___|_| |_|  |_\__,_| .__/
 #                                      |_|
 # Water Map
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from time import time
 from typing import List, Optional
 
 from image_utils import MapImage
@@ -47,12 +49,16 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
     else:
         filepath = path / filename
 
-    print(f"\nReading Water Map")
+    print("\nReading Water Map")
+    logging.debug(f"{filepath}")
     map_image = MapImage(filepath, heightmap.width, heightmap.height)
     depths = map_image.rounded_normalized_data
     image = map_image.image
 
     # Generate a soil moisture map from the water map
+    logging.debug("Generating soil moisture map")
+    logging.debug("Make distance array")
+    t = -time()
     distance: List[List[float]] = []
     for x in range(image.width):
         row = []
@@ -62,6 +68,7 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
             else:
                 row.append(100)
         distance.append(row)
+    logging.debug(f"Finished in {t+time():.3} sec.")
 
     def transfer_value(x: int, y: int, dx: int, dy: int) -> float:
         if x + dx < 0 or x + dx >= image.height or y + dy < 0 or y + dy >= image.height:
@@ -76,6 +83,8 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
         vertical = abs(za - zb) * 4
         return distance[x + dx][y + dy] + horizontal + vertical
 
+    logging.debug("Process irrigation distances")
+    t = -time()
     for i in range(16):
         for x in range(image.width):
             for y in range(image.height):
@@ -84,7 +93,9 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
                     for dy in [-1, 0, 1]:
                         min_distance = min(min_distance, transfer_value(x, y, dx, dy))
                 distance[x][y] = min_distance
+    logging.debug(f"Finished in {t+time():.3} sec.")
 
+    t = -time()
     moisture = []
     for x in range(image.width):
         for y in range(image.height):

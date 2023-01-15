@@ -1,15 +1,16 @@
 [tool.poetry]
 name = "timberborn-mapper"
-version = "0.3.1-a"
+version = "0.3.3-a"
 description = "Tool for importing heightmap images as Timberborn custom maps."
-authors = ["Avatar"]
-license = "Matthew McMullanBSD 2-Clause \"Simplified\" License"
+authors = ["Matthew McMullan"]
+license = "BSD 2-Clause \"Simplified\" License"
 readme = "README.md"
 packages = [{include = "timberborn_mapper"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.12"
 Pillow = "^9.4.0"
+colorama = "^0.4.6"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^5.0.4"
@@ -17,6 +18,9 @@ unimport = "^0.12.3"
 black = "^22.12.0"
 isort = "5.*"
 pre-commit = "^2.19.0"
+
+[tool.poetry.group.pyinstaller.dependencies]
+pyinstaller = "^5.7.0"
 
 [tool.black]
 line-length = 128
