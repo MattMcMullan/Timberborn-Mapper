@@ -83,6 +83,11 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
         vertical = abs(za - zb) * 4
         return distance[x + dx][y + dy] + horizontal + vertical
 
+    BAR_LENGHT = 60
+    full_progress = 16 * image.width
+    step = max((full_progress // BAR_LENGHT), 1)
+    current_progress = 0
+
     logging.debug("Process irrigation distances")
     t = -time()
     for i in range(16):
@@ -93,6 +98,12 @@ def read_water_map(heightmap: Heightmap, filename: Optional[str], path: Optional
                     for dy in [-1, 0, 1]:
                         min_distance = min(min_distance, transfer_value(x, y, dx, dy))
                 distance[x][y] = min_distance
+            if logging.root.level <= logging.INFO:
+                current_progress += 1
+                progress_steps = current_progress // step
+                print(f"\r[{'='*progress_steps:<{BAR_LENGHT}}]", end=' ')
+    if logging.root.level <= logging.INFO:
+        print()  # escape progress bar
     logging.debug(f"Finished in {t+time():.3} sec.")
 
     t = -time()
