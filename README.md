@@ -30,9 +30,11 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 Open the command prompt and cd to the directory with the code. Run `python mapper --help` to see instructions on how to use it.
 
 ## Binary version (Windows)
-Open command promt (or powershell) and cd to the folder with exectutable. Run `TimberbornMapper.exe --help`
+Open command promt (or powershell) and cd to the folder with exectutable.
+Run `TimberbornMapper.exe --help`
 
-You can also just drag-n-drop heightmap image or spec file onto exectutable's icon or it's links. You can set options this way directly. It will output .timber file into same place where inpiut file was taken.
+You can also just drag-n-drop heightmap image or spec file onto exectutable's icon or it's links. But can't set options directly this way.
+It will output **.timber** file into same place where inpiut file was taken.
 
 ## Getting heightmaps
 
