@@ -8,15 +8,24 @@ from enum import Enum
 from hashlib import sha1
 from pathlib import Path
 from platform import python_version
+# from subprocess import run
 from time import time
 from typing import Any, Optional, Union
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import colorama
+from appdirs import AppDirs
 from maps.format import TimberbornMap, TimberbornSingletons
 from maps.heightmap import ImageToTimberbornHeightmapLinearConversionSpec, ImageToTimberbornHeightmapSpec, read_heightmap
 from maps.treemap import ImageToTimberbornTreemapSpec, read_tree_map
 from maps.watermap import read_water_map
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    TOML_AVAILABLE = False
+else:
+    TOML_AVAILABLE = True
 
 #  __  __      _
 # |  \/  |__ _(_)_ _
@@ -24,7 +33,63 @@ from maps.watermap import read_water_map
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.4-b-1"
+__version__ = "0.3.5-a-3"
+
+APPNAME = "TimberbornMapper"
+APP_AUTHOR = "MattMcMullan"
+CONFIG_FILE = "mapperconf"
+
+DEFAULT_TOML = """[main]
+config_version = 1
+nocolor = false
+non_interactive = false
+maps_dir = ""
+
+[map]
+max_map_size_defualt = -1
+max_map_size_limit = 1024
+max_elevation_default = -1
+max_elevation_limit = 64
+game_version = ""
+"""
+
+
+class MapperConfig(argparse.Namespace):
+
+    def __init__(self, skip_values=["", "DEFAULT"], **kwargs):
+        self._skip_values = skip_values
+
+        self.maps_dir = ""
+        self.max_map_size_defualt = 256
+        self.max_map_size_limit = 1024
+        self.max_elevation_default = 16
+        self.max_elevation_limit = 64
+        self.nocolor = False
+        self.non_interactive = False
+        self.game_version = ""
+
+        self._safe_extend(skip_values, **kwargs)
+
+    def _safe_extend(self, skip_values, **kwargs):
+        for key, val in kwargs.items():
+            if (val not in skip_values) and (key[0] != "_"):
+                setattr(self, key, val)
+
+    """
+    def load_defaults(self, **kwargs):
+         for key, val in kwargs.items():
+            if (key[0] != "_") and not hasattr(self, key):
+                setattr(self, key, val)
+    """
+
+    def update_extend(self, **kwargs):
+        """extend self attributes overriding existing if value is not in skip_values"""
+        if "_skip_values" in kwargs:
+            skip_values = kwargs.pop("_skip_values")
+        else:
+            skip_values = self._skip_values
+
+        self._safe_extend(skip_values, **kwargs)
 
 
 class GameDefs(Enum):
@@ -32,6 +97,13 @@ class GameDefs(Enum):
     MAP_SUFFIX = ".timber"
     MAX_ELEVATION = 16
     MAX_MAP_SIZE = 256
+
+
+R = colorama.Style.RESET_ALL
+H1 = colorama.Fore.BLUE
+# H2 = colorama.Fore.GREEN
+BOLD = colorama.Style.BRIGHT
+CODE = colorama.Back.WHITE + colorama.Fore.BLACK
 
 
 @dataclass
@@ -72,7 +144,7 @@ class ImageToTimberbornSpec:
 
 def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Path) -> Path:
 
-    logging.info(f"output dir: `{output_path.parent}`")
+    logging.info(f"Output dir: `{output_path.parent}`")
 
     t = -time()
     heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path)
@@ -114,7 +186,7 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
     else:
         timber_path = output_path.with_suffix(".timber")
         arcname = output_path.with_suffix(".json").name
-        print(f"\nZipping '{arcname}'")
+        print(f"Zipping '{arcname}'")
         with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
             timberzip.write(output_path, arcname=arcname)
         # TODO conditional
@@ -127,7 +199,7 @@ def make_output_path(args: Any) -> Path:
     output_path = args.output
     if output_path:
         if output_path.suffix != GameDefs.MAP_SUFFIX.value:
-            logging.warning(f"output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
+            logging.warning(f"Output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
                             f" it will be changed automatically.")
     else:
         output_path = args.input.with_suffix(".tmp")
@@ -182,20 +254,12 @@ def specfile_to_timberborn(args: Any) -> None:
     image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path)
 
 
-def main() -> None:
-    t = -time()
-    colorama.init()
-    R = colorama.Style.RESET_ALL
-    H1 = colorama.Fore.BLUE
-    # H2 = colorama.Fore.GREEN
-    BOLD = colorama.Style.BRIGHT
-    CODE = colorama.Back.WHITE + colorama.Fore.BLACK
-
+def build_parser() -> argparse.ArgumentParser:
     # try to guess script name ('python mapper' vs 'TimberbornMapper.exe')
     script = "mapper"
     for arg in sys.argv:
         if arg.lower().endswith('.exe'):
-            script = arg
+            script = Path(arg).name
             break
 
     description = (
@@ -206,7 +270,7 @@ def main() -> None:
         f" - {BOLD}Specfile{R} mode pulls all map option from a json-formatted file\n\n"
         f" If you are using a binary version you can just {BOLD}drag-n-drop{R} image or spec file on executable or it's link.\n"
         f" (but then you can't set options directly)\n\n"
-        f' Run "{BOLD}{script} m -h{R}" or "{BOLD}{script} s -h{R}" to see actual arguments for each mode, \n'
+        f' Run "{BOLD}{script} --help{R}" to see manual mode and generic options. \n'
         f" like desired map height and width or base elevation. It can also take separate tree and water maps.\n\n"
         f" Try example command:\n"
         f" {CODE}{script} m examples/alpine_lakes/height.png --min-height 4 --width 128 --height 128{R}\n"
@@ -264,13 +328,28 @@ def main() -> None:
 
     parser.add_argument("--water-map", type=str, help="Path to a grayscale water map image. None by default.", default=None)
 
+    parser.add_argument('-c', '--confpath', type=str, default='',
+                        help="Path to config file. Will use default location if empty. '0' to disable.")
+    parser.add_argument('--open-config', action='store', dest='open_config',
+                        nargs='?', const='vi', default=False,
+                        help="Open config file with editor, editor command as argument or vi as default")
+
+    parser.add_argument('--write-config', action="store_true", help='Write (overwrite) config file at defualt location.')
     parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
                                help='Control additional output verbosity')
-    parser.add_argument('-C', '--nocolor', action="store_true", help='Disable usage of colors in console')
+    # parser.add_argument('-C', '--nocolor', action="store_true", default='DEFAULT', help='Disable usage of colors in console')
 
-    parser.add_argument('-I', '--non-interactive', action='store_true', help="Disable interactions")
+    parser.add_argument('-I', '--non-interactive', action='store_true', default='DEFAULT', help="Disable interactions")
 
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    t = -time()
+    colorama.init()
+
+    args = build_parser().parse_args()
+    config = MapperConfig(skip_values=["", "DEFAULT", -1])
 
     # configure logging
     loglevel = getattr(args, "loglevel", "INFO").upper()
@@ -278,40 +357,88 @@ def main() -> None:
         level=getattr(logging, loglevel),
         format=f'{H1}%(levelname)s{R}: %(message)s'
     )
-
-    if getattr(args, 'nocolor', False):
-        colorama.init(strip=True)
     print(f"{BOLD}Timberborn Mapper{R} ver. {H1}{BOLD}{__version__}{R} running on python {H1}{python_version()}{R}")
-    logging.debug(f"Script name is guessed as '{script}'")
 
-    if not args.input.is_absolute():
-        args.input = Path.cwd() / args.input
+    """
+    if TOML_AVAILABLE:
+        if args.open_config:
+            run([args.open_config, str(config_path)])
+            sys.exit(0)
 
-    logging.info(f"input path: `{args.input}`")
+    """
 
-    if not args.input.is_file():
-        sys.exit(f"Path `{args.input}` is not a file or not accessible. Please check it and try again.")
+    if args.confpath == "0":
+        logging.debug("config reading is disabled by options")
+        # config.read_dict(DEFUALT_CONF)
+    elif TOML_AVAILABLE:
+        if args.confpath:
+            config_path = Path(args.confpath)
+        else:
+            app_dirs = AppDirs(APPNAME, APP_AUTHOR)
+            config_path = Path(app_dirs.user_config_dir) / CONFIG_FILE
+
+        if config_path.is_file():
+            logging.debug(f"reading config file from '{config_path}'")
+            with open(config_path, "rb") as f:
+                toml_config = tomllib.load(f)
+                for title, section in toml_config.items():
+                    config.update_extend(**section)
+        else:
+            if args.confpath:
+                logging.critical(f"Can't read config file - it doesn't exist or not a file: '{config_path}'")
+                sys.exit("Couldn't read configuration")
+            else:
+                try:
+                    toml_config = tomllib.loads(DEFAULT_TOML)
+                    for title, section in toml_config.items():
+                        config.update_extend(**section)
+                    config_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(config_path, "w") as f:
+                        f.write(DEFAULT_TOML)
+                except tomllib.TOMLDecodeError as exc:
+                    logging.error(f"Error in default TOML configuration, please contact authors: {exc}")
+                except (OSError, PermissionError) as exc:
+                    logging.error(f"Couln't write config file to '{config_path}', probably permissions or path issue: {exc}")
+                else:
+                    logging.info(f"Created defualt config file: '{config_path}'")
+    else:
+        logging.warning("tomllib is not available (it's included in python 3.11+) reading configuration files is disabled")
+
+    config.update_extend(_skip_values=["DEFAULT"], **vars(args))
+
+    # from pprint import pprint
+    # pprint(vars(config))
+    # print("-- dir --")
+    # pprint(dir(config))
+
+    if not config.input.is_absolute():
+        config.input = Path.cwd() / config.input
+
+    logging.info(f"Input path: `{config.input}`")
+
+    if not config.input.is_file():
+        sys.exit(f"Path `{config.input}` is not a file or not accessible. Please check it and try again.")
 
     # wrapping execution in exception catcher to halt window form closing in interactive mode
     try:
-        if args.input.suffix.lower() == ".json":
+        if config.input.suffix.lower() == ".json":
             logging.info("JSON file will be processed as spec file")
-            specfile_to_timberborn(args)
+            specfile_to_timberborn(config)
         else:
             logging.info("File will be verified and processed like an image")
-            manual_image_to_timberborn(args)
+            manual_image_to_timberborn(config)
     except Exception as exc:
         logging.critical("Exception happened!")
-        if not args.non_interactive:
+        if not config.non_interactive:
             logging.critical("Following error happened during execution:")
             logging.critical(exc)
             input('(Press enter to throw traceback and exit. Run from console to see details if window closes)')
-            raise exc
+        raise exc
 
     t += time()
-    if not args.non_interactive:
+    if not config.non_interactive:
         input('(Press enter to exit)')
-    logging.info(f"\nTotal execution time: {t:.2f} sec.")
+    logging.info(f"Total execution time: {t:.2f} sec.")
 
 
 if __name__ == "__main__":

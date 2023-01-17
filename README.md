@@ -31,7 +31,7 @@ Open the command prompt and cd to the directory with the code. Run `python mappe
 
 ## Binary version (Windows)
 Open command promt (or powershell) and cd to the folder with exectutable.
-Run `TimberbornMapper.exe --help`
+Run `TimberbornMapper.exe --help` to see instructions on how to use it.
 
 You can also just drag-n-drop heightmap image or spec file onto exectutable's icon or it's links. But can't set options directly this way.
 It will output **.timber** file into same place where inpiut file was taken.
@@ -51,3 +51,5 @@ If picture lacks contrast play with "Height scale" slider.
 3. More validation and better error handling.
 4. Document some example method where and how you can get heightmap image of real-world location.
 5. Try to automatically save to <User>/Documents/Timberborn/Maps/ on Windows
+6. Implement configurations (WIP)
+7. Disable colors by env vars

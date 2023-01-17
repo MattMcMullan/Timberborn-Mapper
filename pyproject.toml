@@ -11,6 +11,7 @@ packages = [{include = "timberborn_mapper"}]
 python = ">=3.10,<3.12"
 Pillow = "^9.4.0"
 colorama = "^0.4.6"
+appdirs = "^1.4.4"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^5.0.4"
