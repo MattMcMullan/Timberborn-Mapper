@@ -34,7 +34,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.5-a-4"
+__version__ = "0.3.5-a-5"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
@@ -450,9 +450,10 @@ def main() -> None:
                                 if answer:
                                     answer = str(answer).strip().lower()[0]
                             if answer in ('1', 'y'):
+                                maps_dir = str(guessed_game_dir / "Maps/").replace("\\", "\\\\")
                                 toml_str = re.sub(
                                     '^maps_dir = [\"\']{2}',
-                                    f'maps_dir = "{guessed_game_dir / "Maps/"}"',
+                                    f'maps_dir = "{maps_dir}"',
                                     toml_str,
                                     flags=re.M
                                 )
