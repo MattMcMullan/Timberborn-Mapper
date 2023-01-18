@@ -23,6 +23,8 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 
 # Usage
 
+**Note**: at the moment treemap will generate only birches, other trees need fixing yield attributes.
+
 - script expcets a grayscale image as heightmap (most likely a PNG but some other formats should also work)
 - check help for available options, like setting map size, output file name and script behaviour modifiers
 
@@ -35,6 +37,15 @@ Run `TimberbornMapper.exe --help` to see instructions on how to use it.
 
 You can also just drag-n-drop heightmap image or spec file onto exectutable's icon or it's links. But can't set options directly this way.
 It will output **.timber** file into same place where inpiut file was taken.
+
+## Configuration files
+
+**Note**: Script is using tomllib for config format, so it will work only on python **3.11+** (Windows binary uses 3.11).
+
+If configuration is available script will try to write a template config into system-specific config dir.
+
+If file already exists it will try to read it. Command-line arguments should override config values when set.
+
 
 ## Getting heightmaps
 
@@ -53,3 +64,5 @@ If picture lacks contrast play with "Height scale" slider.
 5. Try to automatically save to <User>/Documents/Timberborn/Maps/ on Windows
 6. Implement configurations (WIP)
 7. Disable colors by env vars
+8. Fix plant Yields
+9. Add chestnut trees
