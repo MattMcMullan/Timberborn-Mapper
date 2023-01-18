@@ -29,11 +29,12 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 - check help for available options, like setting map size, output file name and script behaviour modifiers
 
 ## Script version
-Open the command prompt and cd to the directory with the code. Run `python mapper --help` to see instructions on how to use it.
+- Open the command prompt and cd to the directory with the code.
+- Run `python mapper --help` to see instructions on how to use it.
 
 ## Binary version (Windows)
-Open command promt (or powershell) and cd to the folder with exectutable.
-Run `TimberbornMapper.exe --help` to see instructions on how to use it.
+- Open command promt (or powershell) and cd to the folder with exectutable.
+- Run `TimberbornMapper.exe --help` to see instructions on how to use it.
 
 You can also just drag-n-drop heightmap image or spec file onto exectutable's icon or it's links. But can't set options directly this way.
 It will output **.timber** file into same place where inpiut file was taken.
@@ -50,10 +51,11 @@ If file already exists it will try to read it. Command-line arguments should ove
 ## Getting heightmaps
 
 There are likely a number of services where you can get a heightmap of real or fictional location.
+
 One I've used so far is https://heightmap.skydark.pl/
-It has map size slider limited to 17 km, but you can input it down to 9 km (lesser doesn't work for me for some reason).
-Select desired area and click "Download PNG height map".
-If picture lacks contrast play with "Height scale" slider.
+- It has map size slider limited to 17 km, but you can input it down to 9 km (lesser doesn't work for me for some reason).
+- Select desired area and click "Download PNG height map".
+- If picture lacks contrast play with "Height scale" input slider.
 
 # TODO
 
