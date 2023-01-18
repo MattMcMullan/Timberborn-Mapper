@@ -1,6 +1,9 @@
 # Timberborn-Mapper
 A tool for turning heightmaps into Timberborn maps.
 
+![](https://raw.githubusercontent.com/GinFuyou/Timberborn-Mapper/gins_refactor/assets/TimberbornMapper-680.jpeg)
+> Screencap is taken using QuadrupleTerrainHeight mod, using 48 layers, vanilla game supports less. 
+
 # Setup
 1. Install python. You can find it [here](https://www.python.org/downloads/).
 2. Install pillow. You can read their instructions [here](https://pillow.readthedocs.io/en/stable/installation.html), or just open your command prompt and run "python -m pip install pillow".
