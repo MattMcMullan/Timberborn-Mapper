@@ -77,11 +77,13 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
         return TreeMap([])
 
     print("\nReading Treemap")
+    tree_counts = {}
     filepath = path / spec.filename
 
     map_image = MapImage(filepath, heightmap.width, heightmap.height)
     image = map_image.image
 
+    logging.warning("!! Will generate only birches until Yeilds are fixed!")
     trees = []
     for i, pixel in enumerate(map_image.normalized_data):
         if pixel < spec.treeline_cutoff:
@@ -91,12 +93,25 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
         y = math.floor(i / image.width)
         x = i - y * image.width
         alive = water_map.moisture[i] > 0
-        species = TreeSpecies.maple
+
         if pixel < spec.birch_cutoff:
             species = TreeSpecies.birch
         elif pixel < spec.pine_cutoff:
             species = TreeSpecies.pine
+        else:
+            species = TreeSpecies.maple
+
+        species = TreeSpecies.birch  # WARNING DELETE ME when FIXED
+
+        key = species.value[0]
+        if key not in tree_counts.keys():
+            tree_counts[key] = 1
+        else:
+            tree_counts[key] += 1
+
         trees.append(Tree(species, x, y, z, alive))
 
     logging.info(f"Made {len(trees)} trees. {100 * len(trees)/(image.width * image.height):.2f}% tree coverage.")
+    for key, val in tree_counts.items():
+        logging.debug(f"- {key: <8}: {val: >6}")
     return TreeMap(trees)

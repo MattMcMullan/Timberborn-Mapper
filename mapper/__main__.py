@@ -2,6 +2,7 @@
 import argparse
 import json
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -33,16 +34,18 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.5-a-3"
+__version__ = "0.3.5-a-4"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
-CONFIG_FILE = "mapperconf"
+CONFIG_FILE = "mapperconf.toml"
 
+# This is a config template, not source of config defaults. Use MapperConfig __init__ instead
 DEFAULT_TOML = """[main]
 config_version = 1
 nocolor = false
 non_interactive = false
+keep_json = false
 maps_dir = ""
 
 [map]
@@ -55,6 +58,12 @@ game_version = ""
 
 
 class MapperConfig(argparse.Namespace):
+    _os_dict = {
+        "windows": "w",
+        "unknown": "w",  # not like we have many valid options
+        "macos": "m",
+        "linux": "w"     # change if game supports Linux _natively_
+    }
 
     def __init__(self, skip_values=["", "DEFAULT"], **kwargs):
         self._skip_values = skip_values
@@ -66,9 +75,34 @@ class MapperConfig(argparse.Namespace):
         self.max_elevation_limit = 64
         self.nocolor = False
         self.non_interactive = False
-        self.game_version = ""
+        self.keep_json = False
+
+        self._os_key = self.get_os()
+        self._os_letter = self._os_dict[self._os_key]
+        self.game_version = f"0.3.5.0-c1e2fcc-s{self._os_letter}"
 
         self._safe_extend(skip_values, **kwargs)
+
+    def get_os(self):
+        key = "unknown"
+        if sys.platform.startswith("linux"):
+            key = "linux"
+        elif sys.platform.startswith("win") or sys.platform.startswith("cygwin"):
+            key = "windows"
+        elif sys.platform.startswith("darwin"):
+            key = "macos"
+        return key
+
+    def guess_game_dir(self, user=""):
+        path = None
+        if self._os_key in ("windows", "macos", "linux"):
+            path = Path(f"~{user}/Documents/Timberborn/")
+        if path:
+            path = path.expanduser()
+            logging.debug(f"Game Dir: '{path}'")
+            if path.is_dir():
+                return path
+        return None
 
     def _safe_extend(self, skip_values, **kwargs):
         for key, val in kwargs.items():
@@ -142,7 +176,7 @@ class ImageToTimberbornSpec:
     watermap: Optional[ImageToTimberbornWatermapSpec]
 
 
-def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Path) -> Path:
+def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Path, args: Any) -> Path:
 
     logging.info(f"Output dir: `{output_path.parent}`")
 
@@ -167,12 +201,11 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         TerrainMap=heightmap.terrain_map,
         WaterMap=water_map.water_map,
     )
-    timber_map = TimberbornMap("0", singletons, tree_map.entities)
+    timber_map = TimberbornMap(args.game_version, singletons, tree_map.entities)
 
-    if logging.root.level == logging.DEBUG:
-        data = json.dumps(heightmap.terrain_map)
-        maphash = sha1(data.encode('utf-8')).hexdigest()
-        logging.debug(f"Terrain data hash: sha1 {maphash}")
+    data = json.dumps(heightmap.terrain_map)
+    maphash = sha1(data.encode('utf-8')).hexdigest()
+    logging.debug(f"Terrain data hash: sha1 {maphash}")
 
     try:
         with open(output_path, "w") as f:
@@ -184,13 +217,18 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
         )
         raise exc
     else:
+        logging.debug(output_path)
         timber_path = output_path.with_suffix(".timber")
         arcname = output_path.with_suffix(".json").name
         print(f"Zipping '{arcname}'")
         with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
             timberzip.write(output_path, arcname=arcname)
-        # TODO conditional
-        output_path.unlink()
+        if args.keep_json:
+            target = output_path.parent / f"{output_path.stem}-mapper{maphash[:8]}.json"
+            output_path.rename(target)
+            logging.debug(f"Unzipped file store as '{target}'")
+        else:
+            output_path.unlink()
         print(f"\nSaved to '{timber_path}'\nYou can now open it in Timberborn map editor to add finishing touches.")
     return timber_path
 
@@ -201,6 +239,8 @@ def make_output_path(args: Any) -> Path:
         if output_path.suffix != GameDefs.MAP_SUFFIX.value:
             logging.warning(f"Output extension ('{output_path.suffix}') is not '{GameDefs.MAP_SUFFIX.value}'"
                             f" it will be changed automatically.")
+    elif args.maps_dir:
+        output_path = Path(args.maps_dir) / args.input.with_suffix('.tmp').name
     else:
         output_path = args.input.with_suffix(".tmp")
     if not output_path.is_absolute():
@@ -243,6 +283,7 @@ def manual_image_to_timberborn(args: Any) -> None:
         ),
         args.input.parent,
         output_path,
+        args,
     )
 
 
@@ -251,7 +292,7 @@ def specfile_to_timberborn(args: Any) -> None:
         specdict = json.load(f)
 
     output_path = make_output_path(args)
-    image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path)
+    image_to_timberborn(ImageToTimberbornSpec(**specdict), args.input.parent, output_path, args)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -267,7 +308,9 @@ def build_parser() -> argparse.ArgumentParser:
         f"\n  {BOLD}HOW TO USE:{R}\n\n"
         f" Script has 2 modes: {BOLD}manual{R} and {BOLD}specfile{R}\n"
         f" - {BOLD}Manual{R} mode takes as input a path to an heightmap (image) file and a number of options\n"
-        f" - {BOLD}Specfile{R} mode pulls all map option from a json-formatted file\n\n"
+        f" - {BOLD}Specfile{R} mode pulls all map option from a json-formatted file, commandline map options are\n"
+        f" ignored.\n"
+        f" Mode is set by checking input file extension.\n\n"
         f" If you are using a binary version you can just {BOLD}drag-n-drop{R} image or spec file on executable or it's link.\n"
         f" (but then you can't set options directly)\n\n"
         f' Run "{BOLD}{script} --help{R}" to see manual mode and generic options. \n'
@@ -334,7 +377,8 @@ def build_parser() -> argparse.ArgumentParser:
                         nargs='?', const='vi', default=False,
                         help="Open config file with editor, editor command as argument or vi as default")
 
-    parser.add_argument('--write-config', action="store_true", help='Write (overwrite) config file at defualt location.')
+    parser.add_argument('--keep-json', action='store_true', default='DEFAULT', help="Do not remove map .json after packing")
+    # parser.add_argument('--write-config', action="store_true", help='Write (overwrite) config file at defualt location.')
     parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
                                help='Control additional output verbosity')
     # parser.add_argument('-C', '--nocolor', action="store_true", default='DEFAULT', help='Disable usage of colors in console')
@@ -393,8 +437,28 @@ def main() -> None:
                     for title, section in toml_config.items():
                         config.update_extend(**section)
                     config_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    toml_str = DEFAULT_TOML
+
+                    if not config.non_interactive:
+                        guessed_game_dir = config.guess_game_dir()
+                        if guessed_game_dir:
+                            answer = None
+                            print(f"Found game directory at '{guessed_game_dir}'")
+                            while answer not in ('y', 'n', '0', '1'):
+                                answer = input("Add it's 'Maps/' into config file? (Y/n or 0/1) > ")
+                                if answer:
+                                    answer = str(answer).strip().lower()[0]
+                            if answer in ('1', 'y'):
+                                toml_str = re.sub(
+                                    '^maps_dir = [\"\']{2}',
+                                    f'maps_dir = "{guessed_game_dir / "Maps/"}"',
+                                    toml_str,
+                                    flags=re.M
+                                )
+
                     with open(config_path, "w") as f:
-                        f.write(DEFAULT_TOML)
+                        f.write(toml_str)
                 except tomllib.TOMLDecodeError as exc:
                     logging.error(f"Error in default TOML configuration, please contact authors: {exc}")
                 except (OSError, PermissionError) as exc:
@@ -405,6 +469,9 @@ def main() -> None:
         logging.warning("tomllib is not available (it's included in python 3.11+) reading configuration files is disabled")
 
     config.update_extend(_skip_values=["DEFAULT"], **vars(args))
+    # config building is done
+
+    logging.debug(f"OS detected as {config._os_key.title()} mapper will set GameVersion as {config.game_version}")
 
     # from pprint import pprint
     # pprint(vars(config))
