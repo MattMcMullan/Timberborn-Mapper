@@ -19,7 +19,7 @@ Using poetry
 
 1. Clone repository
 2. Install [poetry](https://python-poetry.org/docs/)
-3. `poetry install` will install all dependencies from `project.toml` and manages virtual environment
+3. `poetry install` will install all dependencies from `pyproject.toml` and manages virtual environment
 4. `poetry shell` activates virtual environment for the project
 
 Currently project requires python 3.10 or 3.11 but may work on other versions.
