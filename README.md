@@ -2,7 +2,7 @@
 A tool for turning height maps into Timberborn maps.
 
 ![](https://raw.githubusercontent.com/GinFuyou/Timberborn-Mapper/gins_refactor/assets/TimberbornMapper-680.jpeg)
-> Screen cap is taken using QuadrupleTerrainHeight mod, using 48 layers, vanilla game supports less.
+> Screen cap is taken using QuadrupleTerrainHeight mod using 48 layers, vanilla game supports less.
 
 # Setup
 1. Install python. You can find it [here](https://www.python.org/downloads/).
@@ -44,7 +44,7 @@ It will output **.timber** file into same place where input file was taken.
 
 ## Configuration files
 
-**Note**: Script is using Tomlin for config format, so it will work only on python **3.11+** (Windows binary uses 3.11).
+**Note**: Script is using `tomllib` for config format, so it will work only on python **3.11+** (Windows binary uses 3.11).
 
 If configuration is available script will try to write a template config into system-specific config dir.
 
