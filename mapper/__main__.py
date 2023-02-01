@@ -34,7 +34,7 @@ else:
 # |_|  |_\__,_|_|_||_|
 # Main
 
-__version__ = "0.3.5-a-5"
+__version__ = "0.3.6-b-1"
 
 APPNAME = "TimberbornMapper"
 APP_AUTHOR = "MattMcMullan"
@@ -50,7 +50,7 @@ maps_dir = ""
 
 [map]
 max_map_size_defualt = -1
-max_map_size_limit = 1024
+max_map_size_limit = 512
 max_elevation_default = -1
 max_elevation_limit = 64
 game_version = ""
@@ -70,7 +70,7 @@ class MapperConfig(argparse.Namespace):
 
         self.maps_dir = ""
         self.max_map_size_defualt = 256
-        self.max_map_size_limit = 1024
+        self.max_map_size_limit = 512
         self.max_elevation_default = 16
         self.max_elevation_limit = 64
         self.nocolor = False
@@ -79,7 +79,7 @@ class MapperConfig(argparse.Namespace):
 
         self._os_key = self.get_os()
         self._os_letter = self._os_dict[self._os_key]
-        self.game_version = f"0.3.5.0-c1e2fcc-s{self._os_letter}"
+        self.game_version = f"0.3.5.1-fb48f47-s{self._os_letter}"
 
         self._safe_extend(skip_values, **kwargs)
 
@@ -181,7 +181,7 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
     logging.info(f"Output dir: `{output_path.parent}`")
 
     t = -time()
-    heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path)
+    heightmap = read_heightmap(width=spec.width, height=spec.height, spec=spec.heightmap, path=path, args=args)
     logging.info(f"Finished in {t + time():.2f} sec.")
 
     t = -time()
@@ -219,7 +219,8 @@ def image_to_timberborn(spec: ImageToTimberbornSpec, path: Path, output_path: Pa
     else:
         logging.debug(output_path)
         timber_path = output_path.with_suffix(".timber")
-        arcname = output_path.with_suffix(".json").name
+        # arcname = output_path.with_suffix(".json").name
+        arcname = "world.json"
         print(f"Zipping '{arcname}'")
         with ZipFile(timber_path, "w", compression=ZIP_DEFLATED, compresslevel=8) as timberzip:
             timberzip.write(output_path, arcname=arcname)
@@ -359,7 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--birch-cutoff",
         type=float,
-        help="Relative pixel intensity under which trees will spwan as birch trees. Defaults to 0.2.",
+        help="Relative pixel intensity under which trees will spwan as birch trees. Defaults to 0.4.",
         default=0.4,
     )
     parser.add_argument(
@@ -373,10 +374,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument('-c', '--confpath', type=str, default='',
                         help="Path to config file. Will use default location if empty. '0' to disable.")
+    """
     parser.add_argument('--open-config', action='store', dest='open_config',
                         nargs='?', const='vi', default=False,
                         help="Open config file with editor, editor command as argument or vi as default")
-
+    """
     parser.add_argument('--keep-json', action='store_true', default='DEFAULT', help="Do not remove map .json after packing")
     # parser.add_argument('--write-config', action="store_true", help='Write (overwrite) config file at defualt location.')
     parser.add_argument('-l', '--loglevel', choices=('debug', 'info', 'warning', 'error', 'critical'), default='info',
@@ -470,6 +472,16 @@ def main() -> None:
         logging.warning("tomllib is not available (it's included in python 3.11+) reading configuration files is disabled")
 
     config.update_extend(_skip_values=["DEFAULT"], **vars(args))
+
+    if config.width > config.max_map_size_limit or config.height > config.max_map_size_limit:
+        logging.warning(f"map size {config.width} x {config.height} exceeds 'max_map_size_limit' = {config.max_map_size_limit}")
+        max_of_size = max(config.width, config.height)
+        ratio = config.max_map_size_limit / max_of_size
+        if config.width > 0:
+            config.width = int(config.width * ratio)
+        if config.height > 0:
+            config.height = int(config.height * ratio)
+        logging.warning(f"adjusted to {config.width} x {config.height}. Change options or config to override.")
     # config building is done
 
     logging.debug(f"OS detected as {config._os_key.title()} mapper will set GameVersion as {config.game_version}")

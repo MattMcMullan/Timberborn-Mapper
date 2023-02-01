@@ -36,7 +36,7 @@ Currently project requires python 3.10 or 3.11 but may work on other versions.
 - Run `python mapper --help` to see instructions on how to use it.
 
 ## Binary version (Windows)
-- Open command promt (or powershell) and cd to the folder with executable.
+- Open command promt (or powershell) and `cd` ("change directory" command) to the folder with executable.
 - Run `TimberbornMapper.exe --help` to see instructions on how to use it.
 
 You can also just drag-n-drop height map image or spec file onto executable's icon or it's links. But can't set options directly this way.
@@ -69,5 +69,5 @@ One I've used so far is https://heightmap.skydark.pl/
 5. ~~Try to automatically save to /Documents/Timberborn/Maps/ on Windows.~~
 6. Implement configurations (WIP).
 7. Disable colors by env vars.
-8. Fix plant Yields.
-9. Add chestnut trees.
+8. ~~Fix plant Yields.~~
+9. ~~Add chestnut trees.~~

@@ -15,16 +15,24 @@ from image_utils import MapImage
 from maps.format import (TimberbornBlockObject, TimberbornCoordinates, TimberbornCoordinatesOffseter, TimberbornEntity,
                          TimberbornGrowable, TimberbornLivingNaturalResource, TimberbornNaturalResourceModelRandomizer,
                          TimberbornOrientation, TimberbornTree, TimberbornTreeComponents, TimberbornWateredObject,
-                         TimberbornYielderCuttable)
+                         TimberbornYielderCuttable, TimberbornGatherableYieldGrower, TimberbornYielderGatherable)
 
 from .heightmap import Heightmap
 from .watermap import WaterMap
 
 
+class Goods(Enum):
+    PineResin = "PineResin"
+    Log = "Log"
+    MapleSyrup = "MapleSyrup"
+    Chestnut = "Chestnut"
+
+
 class TreeSpecies(Enum):
-    birch = ("Birch", 1)
-    pine = ("Pine", 2)
-    maple = ("Maple", 3)
+    birch = ("Birch", {"logs": 1, "gth_good": None})
+    pine = ("Pine", {"logs": 2, "gth_good": Goods.PineResin, "gth_amount": 2})
+    maple = ("Maple", {"logs": 8, "gth_good": Goods.MapleSyrup, "gth_amount": 3})
+    chestnut = ("ChestnutTree", {"logs": 4, "gth_good": Goods.Chestnut, "gth_amount": 3})
 
 
 @dataclass
@@ -44,21 +52,34 @@ class TreeMap:
     def entities(self) -> List[TimberbornEntity]:
         entities: List[TimberbornEntity] = []
         for tree in self.trees:
-            entities.append(
-                TimberbornTree(
-                    species=tree.species.value[0],
-                    Components=TimberbornTreeComponents(
-                        BlockObject=TimberbornBlockObject(
+            species_dict = tree.species.value[1]
+            components_kwargs = {
+                "BlockObject": TimberbornBlockObject(
                             Coordinates=TimberbornCoordinates(X=tree.x, Y=tree.y, Z=tree.z),
                             Orientation=TimberbornOrientation(),
                         ),
-                        CoordinatesOffseter=TimberbornCoordinatesOffseter.random(),
-                        Growable=TimberbornGrowable(1.0),
-                        LivingNaturalResource=TimberbornLivingNaturalResource(IsDead=not tree.alive),
-                        NaturalResourceModelRandomizer=TimberbornNaturalResourceModelRandomizer.random(),
-                        WateredObject=TimberbornWateredObject(IsDry=not tree.alive),
-                        YielderCuttable=TimberbornYielderCuttable(Id="Log", Amount=tree.species.value[1]),
-                    ),
+                "CoordinatesOffseter": TimberbornCoordinatesOffseter.random(),
+                "Growable": TimberbornGrowable(1.0),
+                "LivingNaturalResource": TimberbornLivingNaturalResource(IsDead=not tree.alive),
+                "NaturalResourceModelRandomizer": TimberbornNaturalResourceModelRandomizer.random(),
+                "WateredObject": TimberbornWateredObject(IsDry=not tree.alive),
+                "YielderCuttable": TimberbornYielderCuttable(Id=Goods.Log.value, Amount=species_dict['logs']),
+            }
+            # add gatherables if tree has it
+            gatherable_good = species_dict.get('gth_good', None)
+            if gatherable_good:
+                components_kwargs.update({
+                    "GatherableYieldGrower": TimberbornGatherableYieldGrower(),  # TODO add growth randomization
+                    "YielderGatherable": TimberbornYielderGatherable(
+                                            Id=gatherable_good.value,
+                                            Amount=species_dict.get("gth_amount", 1)
+                                         )
+                })
+
+            entities.append(
+                TimberbornTree(
+                    species=tree.species.value[0],
+                    Components=TimberbornTreeComponents(**components_kwargs),
                 )
             )
         return entities
@@ -68,8 +89,9 @@ class TreeMap:
 class ImageToTimberbornTreemapSpec:
     filename: str
     treeline_cutoff: float = 0.1
-    birch_cutoff: float = 0.4
-    pine_cutoff: float = 0.7
+    birch_cutoff: float = 0.3
+    pine_cutoff: float = 0.45
+    chestnut_cutoff: float = 0.6
 
 
 def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: Optional[ImageToTimberbornTreemapSpec]):
@@ -98,10 +120,12 @@ def read_tree_map(heightmap: Heightmap, water_map: WaterMap, path: Path, spec: O
             species = TreeSpecies.birch
         elif pixel < spec.pine_cutoff:
             species = TreeSpecies.pine
+        elif pixel < spec.chestnut_cutoff:
+            species = TreeSpecies.chestnut
         else:
             species = TreeSpecies.maple
 
-        species = TreeSpecies.birch  # WARNING DELETE ME when FIXED
+        # species = TreeSpecies.birch  # WARNING DELETE ME when FIXED
 
         key = species.value[0]
         if key not in tree_counts.keys():

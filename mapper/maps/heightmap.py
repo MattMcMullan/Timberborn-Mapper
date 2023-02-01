@@ -7,7 +7,7 @@
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Any
 
 from image_utils import MapImage
 from maps.format import TimberbornArray, TimberbornMapSize, TimberbornSize, TimberbornTerrainMap
@@ -117,8 +117,8 @@ def bucketize_data(data: List[float], bucket_weights: List[float]) -> List[int]:
     return result
 
 
-def read_heightmap(width: int, height: int, path: Path, spec: ImageToTimberbornHeightmapSpec) -> Heightmap:
-    print(f"\nReading Heightmap")
+def read_heightmap(width: int, height: int, path: Path, spec: ImageToTimberbornHeightmapSpec, args: Any) -> Heightmap:
+    print("\nReading Heightmap")
 
     filepath = path / spec.filename
 

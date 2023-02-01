@@ -42,6 +42,7 @@ class MapImage:
     _rounded_normalized_data = None
 
     def __init__(self, filename: Path, width: int, height: int):
+        logging.debug(f"Init MapImage {width} x {height}")
         self.image = read_monochrome_image(filename, width, height)
 
     @property

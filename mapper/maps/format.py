@@ -4,9 +4,10 @@
 # |_|  |_\__,_| .__/_|\___/_| |_|_|_\__,_|\__|
 #             |_|
 # Map Format
-import random
+from random import random as pyrandom
 import uuid
-from typing import List
+from typing import List, Optional
+import logging
 
 
 class TimberbornSize(dict):
@@ -96,17 +97,22 @@ class TimberbornCoordinatesOffseter(dict):
 
     @classmethod
     def random(cls) -> "TimberbornCoordinatesOffseter":
-        return cls(TimberbornCoordinatesOffset(random.random() * 0.25, random.random() * 0.25))
+        return cls(TimberbornCoordinatesOffset(pyrandom() * 0.25, pyrandom() * 0.25))
 
 
 class TimberbornNaturalResourceModelRandomizer(dict):
-    def __init__(self, Rotation: float, DiameterScale: float, HeightScale: float):
+    def __init__(self, Rotation: float, DiameterScale: float, HeightScale: float, round_to: int = 6):
+        if round_to:
+            Rotation = round(Rotation, round_to)
+            DiameterScale = round(DiameterScale, round_to)
+            HeightScale = round(HeightScale, round_to)
+
         dict.__init__(self, Rotation=Rotation, DiameterScale=DiameterScale, HeightScale=HeightScale)
 
     @classmethod
     def random(cls) -> "TimberbornNaturalResourceModelRandomizer":
-        scale = (random.random() * 0.75) + 0.5
-        return TimberbornNaturalResourceModelRandomizer(random.random() * 360, scale, scale)
+        scale = (pyrandom() * 0.75) + 0.5
+        return TimberbornNaturalResourceModelRandomizer(pyrandom() * 360, scale, scale)
 
 
 class TimberbornYielderCuttable(dict):
@@ -120,6 +126,20 @@ class TimberbornYielderCuttable(dict):
                 "Amount": Amount,
             },
         )
+
+
+# New Gatherable Objects
+class TimberbornGatherableYieldGrower(dict):
+    def __init__(self, GrowthProgress: float = -1.0, round_to: int = 2):
+        if GrowthProgress < 0.0:
+            GrowthProgress = pyrandom()
+        if round_to:
+            GrowthProgress = round(GrowthProgress, round_to)
+        dict.__init__(self, GrowthProgress=GrowthProgress)
+
+
+class TimberbornYielderGatherable(TimberbornYielderCuttable):
+    pass
 
 
 class TimberbornWateredObject(dict):
@@ -147,6 +167,8 @@ class TimberbornTreeComponents(dict):
         NaturalResourceModelRandomizer: TimberbornNaturalResourceModelRandomizer,
         WateredObject: TimberbornWateredObject,
         YielderCuttable: TimberbornYielderCuttable,
+        GatherableYieldGrower: Optional[TimberbornGatherableYieldGrower] = None,
+        YielderGatherable: Optional[TimberbornYielderGatherable] = None,
     ):
         dict.__init__(
             self,
@@ -162,6 +184,13 @@ class TimberbornTreeComponents(dict):
         )
         self["Yielder:Cuttable"] = YielderCuttable
         self["Inventory:GoodStack"] = {"Storage": {"Goods": []}}
+        if GatherableYieldGrower:
+            if not YielderGatherable:
+                logging.error("Components spefied GatherableYieldGrower but not YielderGatherable,"
+                              " may result game crashing on map validation.")
+            else:
+                self["GatherableYieldGrower"] = GatherableYieldGrower
+                self["Yielder:Gatherable"] = YielderGatherable
 
 
 class TimberbornTree(TimberbornEntity):
